@@ -443,8 +443,9 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
       <div class="irow">ℹ️ Cấu hình áp dụng cho <strong>cả 2 file</strong> — đảm bảo 2 file cùng định dạng cột.</div>
     </div>
 
-    <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
-      <button class="btn btn-ac btn-full" id="btnCmp" onclick="startCmp()" disabled style="flex:1">⚡ So sánh giá</button>
+    <div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-ac btn-full" id="btnCmp" onclick="startCmp()" disabled style="flex:1;min-width:190px">⚡ So sánh giá</button>
+      <button class="btn btn-gn btn-full" id="btnPromo" onclick="startPromo()" disabled style="flex:1;min-width:190px">🏆 KM tốt nhất 1 ngày</button>
       <button class="btn btn-ghost btn-sm" onclick="resetAll()" title="Reset toàn bộ">↺ Reset</button>
     </div>
   </div>
@@ -514,6 +515,52 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
     </div>
   </div>
 
+  <!-- CARD 5: KM TỐT NHẤT 1 NGÀY -->
+  <div class="card" id="promoCard" style="display:none">
+    <div class="card-head">
+      <div class="sec-n">★</div>
+      <span class="sec-t">🔥 Cơ hội bán hàng hôm nay</span>
+      <span id="promoTitle" class="sec-sub" style="margin-left:4px"></span>
+      <span id="promoCnt" style="font-size:10px;color:var(--t2);background:var(--bg3);padding:2px 8px;border-radius:20px;margin-left:6px"></span>
+      <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="copyPromoCSV()" title="Copy danh sách KM">📋 CSV</button>
+        <button class="btn btn-ac btn-sm" onclick="exportPromoXlsx()" title="Xuất Excel gửi ngay">📊 Xuất file gửi ngay</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="stats" id="promoStats"></div>
+      <div class="summary-bar" id="promoSum"></div>
+      <div class="ctrlbar">
+        <select class="msel" id="promoBrand" onchange="renderPromoTbl()"><option value="">Tất cả hãng</option></select>
+        <select class="msel" id="promoSort" onchange="renderPromoTbl()">
+          <option value="pct">Xếp theo % giảm</option>
+          <option value="amount">Xếp theo tiền giảm</option>
+          <option value="price">Xếp theo giá KM thấp</option>
+        </select>
+        <input class="sinp" id="promoSearch" placeholder="🔍 Tên / mã SP..." oninput="renderPromoTbl()">
+        <span class="rcnt" id="promoRcnt"></span>
+      </div>
+      <div class="tbl-wrap" style="max-height:520px">
+        <table>
+          <thead><tr>
+            <th style="min-width:42px">Top</th>
+            <th style="min-width:115px">Mã SP</th>
+            <th style="min-width:240px">Tên sản phẩm</th>
+            <th style="min-width:78px">Hãng</th>
+            <th style="min-width:105px;text-align:right">Giá gốc</th>
+            <th style="min-width:105px;text-align:right">Giá KM</th>
+            <th style="min-width:105px;text-align:right">Tiết kiệm</th>
+            <th style="min-width:72px;text-align:right">% Giảm</th>
+            <th style="min-width:110px">Đánh giá</th>
+            <th style="min-width:240px">Chi tiết KM</th>
+          </tr></thead>
+          <tbody id="promoBody"></tbody>
+        </table>
+      </div>
+      <div id="promoChart"></div>
+    </div>
+  </div>
+
 </div><!-- /results -->
 </div><!-- /main -->
 
@@ -521,7 +568,7 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
 
 </div><!-- /app -->
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script>
 'use strict';
 // ═══════════════════════════════════════════════════════
@@ -545,6 +592,10 @@ function toggleCard(bodyId,btn){
 let tplId=53,tplName='Điện Gia Dụng',tplFmt='dt58';
 let rawN=null,rawM=null,allRows=[],activeF='all';
 let sortCol=null,sortDir=1;
+let promoRows=[];
+const PROMO_MIN_PCT=0.05;      // chỉ giữ KM đáng chú ý: giảm từ 5%
+const PROMO_MIN_SAVE=100000;   // và tiết kiệm tối thiểu 100.000đ
+const PROMO_EXPORT_LIMIT=50;   // file gửi nhanh: tối đa 50 deal tốt nhất
 let visCols=['stt','ma','name','brand','prN','prM','diff','pct','status','km'];
 const COLS={stt:'STT',ma:'Mã SP',name:'Tên sản phẩm',brand:'Hãng',prN:'Giá N',prM:'Giá M',diff:'Chênh lệch',pct:'% Đổi',status:'Trạng thái',km:'Chi tiết KM'};
 const CW={stt:38,ma:115,name:210,brand:75,prN:100,prM:100,diff:100,pct:68,status:90,km:220};
@@ -655,7 +706,10 @@ function loadFile(side,inp){
   r.onerror=()=>toast('Không thể đọc file',false);
   r.readAsBinaryString(file);
 }
-function chkReady(){$('btnCmp').disabled=!(rawN&&rawM);}
+function chkReady(){
+  $('btnCmp').disabled=!(rawN&&rawM);
+  $('btnPromo').disabled=!(rawN||rawM);
+}
 
 // ═══════════════════════════════════════════════════════
 //  DRAG & DROP
@@ -987,6 +1041,237 @@ function renderChart(){
   }).join('')+'</div>';
 }
 
+
+// ═══════════════════════════════════════════════════════
+//  BEST PROMOTION - ONE DAY
+// ═══════════════════════════════════════════════════════
+function startPromo(){
+  if(!rawN&&!rawM){toast('Upload ít nhất 1 file giá để phân tích KM',false);return;}
+  const btn=$('btnPromo');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spin-ic">⏳</span> Đang xếp hạng KM...';
+  setTimeout(()=>{
+    try{doPromo();}
+    catch(e){toast('Lỗi phân tích KM: '+e.message,false);console.error(e);}
+    finally{btn.disabled=false;btn.innerHTML='🏆 KM tốt nhất 1 ngày';}
+  },100);
+}
+function doPromo(){
+  const useSide=rawM?'M':'N';
+  const data=useSide==='M'?rawM:rawN;
+  const label=($(useSide==='M'?'lM':'lN').value||`Ngày ${useSide}`).trim();
+  const parse=manualMode?parseManual:d=>parseAuto(d,tplFmt);
+  const m=parse(data);
+  promoRows=Object.values(m).map(r=>{
+    const gg=r.gg||null, gi=r.gi||null;
+    const save=(gg&&gi&&gg>gi)?gg-gi:0;
+    const pct=gg&&save?save/gg:0;
+    const score=Math.round((pct*100)*60 + Math.min(save/100000,50)*40);
+    const tag=pct>=0.18&&save>=500000?'🔥 HOT DEAL':pct>=0.12&&save>=300000?'💎 SIÊU KM':pct>=0.08&&save>=150000?'⭐ NÊN ĐẨY':'✅ DEAL TỐT';
+    return {...r,pricePromo:gi||gg||null,save,pctPromo:pct,dealScore:score,dealTag:tag,label};
+  })
+  // Chỉ giữ KM thật sự đáng gửi: có giá KM thấp hơn giá gốc, mức giảm đủ lớn.
+  .filter(r=>r.save>=PROMO_MIN_SAVE && r.pctPromo>=PROMO_MIN_PCT)
+  .sort((a,b)=>(b.dealScore-a.dealScore)||(b.pctPromo-a.pctPromo)||(b.save-a.save));
+
+  const brands=[...new Set(promoRows.map(r=>r.brand))].sort();
+  $('promoBrand').innerHTML='<option value="">Tất cả hãng</option>'+brands.map(b=>`<option>${b}</option>`).join('');
+  $('promoTitle').textContent=`— ${tplName} | ${label}`;
+  $('promoCnt').textContent=`${promoRows.length} deal đáng gửi`;
+  renderPromoStats();renderPromoTbl();renderPromoChart();
+  $('results').style.display='block';
+  $('promoCard').style.display='block';
+  setTimeout(()=>$('promoCard').scrollIntoView({behavior:'smooth',block:'start'}),80);
+  toast(promoRows.length?`✓ Tìm thấy ${promoRows.length} deal đáng gửi`:`Không có deal đủ mạnh (≥ ${(PROMO_MIN_PCT*100).toFixed(0)}% và ≥ ${fmtNum(PROMO_MIN_SAVE)}đ)`,!!promoRows.length);
+}
+function getPromoFiltered(){
+  const brand=$('promoBrand').value;
+  const q=($('promoSearch').value||'').toLowerCase().trim();
+  let rows=promoRows;
+  if(brand)rows=rows.filter(r=>r.brand===brand);
+  if(q)rows=rows.filter(r=>r.name.toLowerCase().includes(q)||r.ma.includes(q));
+  const mode=$('promoSort').value;
+  rows=[...rows].sort((a,b)=>{
+    if(mode==='amount')return (b.save-a.save)||(b.pctPromo-a.pctPromo);
+    if(mode==='price')return (a.pricePromo-b.pricePromo)||(b.dealScore-a.dealScore);
+    return (b.dealScore-a.dealScore)||(b.pctPromo-a.pctPromo)||(b.save-a.save);
+  });
+  return rows;
+}
+function renderPromoStats(){
+  const total=promoRows.length;
+  const bestPct=total?promoRows.reduce((a,b)=>b.pctPromo>a.pctPromo?b:a):null;
+  const bestAmt=total?promoRows.reduce((a,b)=>b.save>a.save?b:a):null;
+  const avg=total?promoRows.reduce((s,r)=>s+r.pctPromo,0)/total:0;
+  const brands=new Set(promoRows.map(r=>r.brand)).size;
+  $('promoStats').innerHTML=[
+    {v:total,l:'SP có KM',c:'cb'},
+    {v:brands,l:'Hãng có KM',c:'cp'},
+    {v:bestPct?(bestPct.pctPromo*100).toFixed(0)+'%':'—',l:'% giảm cao nhất',c:'cg'},
+    {v:bestAmt?fmtP(bestAmt.save):'—',l:'Tiết kiệm cao nhất',c:'cg'},
+    {v:avg?(avg*100).toFixed(1)+'%':'—',l:'Giảm TB',c:'ca'},
+  ].map(s=>`<div class="stat"><div class="sv ${s.c}">${s.v}</div><div class="sl">${s.l}</div></div>`).join('');
+  $('promoSum').innerHTML=[
+    {ic:'🏆',l:'KM tốt nhất theo %',v:bestPct?bestPct.name.slice(0,30)+'… · '+(bestPct.pctPromo*100).toFixed(1)+'%':'—',c:'cg'},
+    {ic:'💰',l:'Tiết kiệm nhiều nhất',v:bestAmt?bestAmt.name.slice(0,30)+'… · '+fmtP(bestAmt.save)+'đ':'—',c:'cg'},
+  ].map(i=>`<div class="spill"><span>${i.ic}</span><span>${i.l}: <strong class="${i.c}">${i.v}</strong></span></div>`).join('');
+}
+function renderPromoTbl(){
+  const rows=getPromoFiltered();
+  $('promoRcnt').textContent=`${Math.min(rows.length,300)} / ${rows.length} SP`;
+  $('promoBody').innerHTML=rows.slice(0,300).map((r,i)=>`<tr>
+    <td style="text-align:center;font-weight:700;color:var(--ac)">${i+1}</td>
+    <td><span class="mono">${r.ma}</span></td>
+    <td style="font-weight:500">${r.name}</td>
+    <td style="text-align:center"><span style="font-size:10px;color:var(--t2);background:var(--bg3);padding:2px 7px;border-radius:4px;white-space:nowrap">${r.brand}</span></td>
+    <td class="nr" style="color:var(--t2)">${fmtP(r.gg)}</td>
+    <td class="nr" style="font-weight:700;color:var(--gn)">${fmtP(r.pricePromo)}</td>
+    <td class="ng">-${fmtP(r.save)}</td>
+    <td class="ng">${(r.pctPromo*100).toFixed(1)}%</td>
+    <td style="text-align:center"><span class="badge bg-g">${r.dealTag}</span></td>
+    <td><div class="km-t">${r.km||''}</div></td>
+  </tr>`).join('');
+}
+function renderPromoChart(){
+  const ch=promoRows.slice(0,14);
+  if(!ch.length){$('promoChart').innerHTML='';return;}
+  const mx=Math.max(...ch.map(r=>r.pctPromo));
+  $('promoChart').innerHTML=`<div class="chart-area">
+    <div class="chart-title">TOP KM TỐT NHẤT — xếp theo % giảm</div>`+ch.map(r=>{
+      const w=Math.max(4,Math.round(r.pctPromo/mx*92));
+      const nm=r.name.length>30?r.name.slice(0,28)+'…':r.name;
+      const lv=(r.pctPromo*100).toFixed(1)+'%';
+      return`<div class="bar-row">
+        <div class="bar-lbl" title="${r.name}">${nm}</div>
+        <div class="bar-track"><div class="bar-fill bf-g" style="width:${w}%">${w>24?lv:''}</div></div>
+        <div class="bar-val">${w<=24?lv:''} · ${fmtP(r.save)}đ</div>
+      </div>`;
+    }).join('')+'</div>';
+}
+function copyPromoCSV(){
+  const rows=getPromoFiltered();
+  const hdr=['Top','Mã SP','Tên sản phẩm','Hãng','Giá gốc','Giá KM','Tiết kiệm','% Giảm','Chi tiết KM'].join('\t');
+  const body=rows.map((r,i)=>[i+1,r.ma,r.name,r.brand,r.gg??'',r.pricePromo??'',r.save??'',(r.pctPromo*100).toFixed(1)+'%',r.km||''].join('\t'));
+  navigator.clipboard.writeText([hdr,...body].join('\n')).then(()=>toast(`✓ Copy ${rows.length} dòng KM`)).catch(()=>toast('Không thể copy',false));
+}
+function promoLevelColor(r,i){
+  if(i===0)return {bg:'FEF3C7',tc:'92400E',tag:'🥇 BEST DEAL'};
+  if(i===1)return {bg:'F1F5F9',tc:'334155',tag:'🥈 TOP DEAL'};
+  if(i===2)return {bg:'FFEDD5',tc:'9A3412',tag:'🥉 TOP DEAL'};
+  if(r.pctPromo>=0.18&&r.save>=500000)return {bg:'DCFCE7',tc:'065F46',tag:'🔥 HOT DEAL'};
+  if(r.pctPromo>=0.12&&r.save>=300000)return {bg:'ECFDF5',tc:'047857',tag:'💎 SIÊU KM'};
+  if(r.pctPromo>=0.08&&r.save>=150000)return {bg:'F0FDF4',tc:'166534',tag:'⭐ NÊN ĐẨY'};
+  return {bg:i%2===0?'FFFFFF':'F8FAFC',tc:'334155',tag:'✅ DEAL TỐT'};
+}
+function buildPromoReportSheet(wb,rows){
+  const top=rows.slice(0,PROMO_EXPORT_LIMIT);
+  const nc=10;
+  const ws=xSheet([6,18,46,14,16,16,16,11,15,58],34);
+  const today=new Date().toLocaleDateString('vi-VN');
+  const totalSave=top.reduce((s,r)=>s+(r.save||0),0);
+  const avgPct=top.length?top.reduce((s,r)=>s+(r.pctPromo||0),0)/top.length:0;
+  const best=top[0];
+  ws['!margins']={left:0.25,right:0.25,top:0.4,bottom:0.4,header:0.2,footer:0.2};
+  ws['!pageSetup']={orientation:'landscape',fitToWidth:1,fitToHeight:0};
+  ws['!views']=[{showGridLines:false}];
+
+  // Title block
+  xRow(ws,0,nc,`CƠ HỘI BÁN HÀNG HÔM NAY - ${tplName.toUpperCase()}`,xStyle(xFont('Arial',16,true,'FFFFFF'),P.T_BG,xAlign('center','center'),P.T_BG));
+  xMerge(ws,0,0,0,nc-1);
+  ws['!rows'].push({hpx:32});
+  xRow(ws,1,nc,`Chỉ xuất deal đủ mạnh: giảm từ ${(PROMO_MIN_PCT*100).toFixed(0)}% và tiết kiệm từ ${fmtNum(PROMO_MIN_SAVE)}đ | Ngày xuất: ${today}`,xStyle(xFont('Arial',10,false,'E2E8F0'),P.S_BG,xAlign('center','center'),P.S_BG));
+  xMerge(ws,1,0,1,nc-1);
+  ws['!rows'].push({hpx:24});
+  xRow(ws,2,nc,'',xStyle(null,'FFFFFF',xAlign('center','center')));
+  ws['!rows'].push({hpx:8});
+
+  // KPI cards: label row + value row
+  const kpis=[
+    {c1:0,c2:1,label:'DEAL ĐÁNG GỬI',value:top.length,sub:'sản phẩm',bg:'DBEAFE',fg:'1D4ED8'},
+    {c1:2,c2:3,label:'GIẢM TRUNG BÌNH',value:(avgPct*100).toFixed(1)+'%',sub:'trên top deal',bg:'DCFCE7',fg:'047857'},
+    {c1:4,c2:5,label:'TỔNG TIẾT KIỆM',value:fmtNum(totalSave)+'đ',sub:'tổng giá trị giảm',bg:'FEF3C7',fg:'92400E'},
+    {c1:6,c2:9,label:'BEST DEAL',value:best?best.name:'—',sub:best?`${(best.pctPromo*100).toFixed(1)}% | tiết kiệm ${fmtNum(best.save)}đ`:'',bg:'FEE2E2',fg:'991B1B'},
+  ];
+  kpis.forEach(k=>{
+    for(let c=k.c1;c<=k.c2;c++){
+      xCell(ws,3,c,c===k.c1?k.label:'',xStyle(xFont('Arial',9,true,k.fg),k.bg,xAlign('center','center',true),P.BD));
+      xCell(ws,4,c,c===k.c1?k.value:'',xStyle(xFont('Arial',12,true,k.fg),k.bg,xAlign('center','center',true),P.BD));
+      xCell(ws,5,c,c===k.c1?k.sub:'',xStyle(xFont('Arial',8,false,'475569'),k.bg,xAlign('center','center',true),P.BD));
+    }
+    xMerge(ws,3,k.c1,3,k.c2);xMerge(ws,4,k.c1,4,k.c2);xMerge(ws,5,k.c1,5,k.c2);
+  });
+  ws['!rows'].push({hpx:22});ws['!rows'].push({hpx:28});ws['!rows'].push({hpx:18});
+  xRow(ws,6,nc,'',xStyle(null,'FFFFFF',xAlign('center','center')));
+  ws['!rows'].push({hpx:8});
+
+  // Table header
+  const headerRow=7;
+  const headers=['TOP','Mã SP','Tên sản phẩm','Hãng','Giá gốc','Giá KM','Tiết kiệm','% giảm','Đánh giá','Chi tiết KM'];
+  const hcolors=[P.H_IDX,P.H_IDX,P.H_INFO,P.H_INFO,P.H_OLD,P.H_NEW,P.H_DIF,P.H_PCT,'92400E',P.H_KM];
+  headers.forEach((h,c)=>xCell(ws,headerRow,c,h,xStyle(xFont('Arial',10,true,'FFFFFF'),hcolors[c],xAlign('center','center',true),P.BH)));
+  ws['!rows'].push({hpx:28});
+
+  // Table body
+  top.forEach((r,i)=>{
+    const row=headerRow+1+i;
+    const lv=promoLevelColor(r,i);
+    const bg=lv.bg, tc=lv.tc;
+    const isTop=i<3;
+    xCell(ws,row,0,i+1,xStyle(xFont('Arial',10,true,tc),bg,xAlign('center','center'),P.BD));
+    xCell(ws,row,1,r.ma,xStyle(xFont('Courier New',9,true,P.TX_MA),bg,xAlign('center','center'),P.BD));
+    xCell(ws,row,2,r.name,xStyle(xFont('Arial',9,isTop,'0F172A'),bg,xAlign('left','center',true),P.BD));
+    xCell(ws,row,3,r.brand,xStyle(xFont('Arial',9,false,P.TX_BR),bg,xAlign('center','center'),P.BD));
+    xCell(ws,row,4,r.gg||0,xStyle(xFont('Arial',9,false,P.TX_GS),bg,xAlign('right','center'),P.BD,'#,##0'));
+    xCell(ws,row,5,r.pricePromo||0,xStyle(xFont('Arial',9,true,P.DEC_C),bg,xAlign('right','center'),P.BD,'#,##0'));
+    xCell(ws,row,6,r.save||0,xStyle(xFont('Arial',9,true,P.DEC_C),bg,xAlign('right','center'),P.BD,'#,##0'));
+    xCell(ws,row,7,r.pctPromo||0,xStyle(xFont('Arial',9,true,P.DEC_C),bg,xAlign('center','center'),P.BD,'0.0%'));
+    xCell(ws,row,8,lv.tag,xStyle(xFont('Arial',9,true,tc),bg,xAlign('center','center',true),P.BD));
+    xCell(ws,row,9,r.km||'Giảm trực tiếp trên giá bán',xStyle(xFont('Arial',8,false,P.TX_KM),bg,xAlign('left','center',true),P.BD));
+    ws['!rows'].push({hpx:isTop?34:25});
+  });
+  const last=headerRow+top.length;
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:headerRow,c:0},e:{r:last,c:nc-1}})};
+  ws['!freeze']={xSplit:0,ySplit:8};
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:last,c:nc-1}});
+  XLSX.utils.book_append_sheet(wb,ws,'Gui Ngay Top Deal');
+}
+function buildPromoBrandSheet(wb,rows){
+  const bmap={};
+  rows.forEach(r=>{
+    if(!bmap[r.brand])bmap[r.brand]={count:0,save:0,pct:0,best:null};
+    const b=bmap[r.brand];b.count++;b.save+=r.save;b.pct+=r.pctPromo;if(!b.best||r.dealScore>b.best.dealScore)b.best=r;
+  });
+  const list=Object.entries(bmap).sort((a,b)=>b[1].save-a[1].save);
+  const ws=xSheet([20,12,18,14,48,16],34), nc=6;
+  xRow(ws,0,nc,'TÓM TẮT DEAL THEO HÃNG',xStyle(xFont('Calibri',14,true,'FFFFFF'),P.T_BG,xAlign('center','center')));xMerge(ws,0,0,0,nc-1);ws['!rows'].push({hpx:32});
+  ['Hãng','Số deal','Tổng tiết kiệm','Giảm TB','Deal tốt nhất','% giảm best'].forEach((h,c)=>xCell(ws,2,c,h,xStyle(xFont('Calibri',10,true,'FFFFFF'),[P.H_INFO,P.H_IDX,P.H_DIF,P.H_PCT,P.H_KM,P.H_PCT][c],xAlign('center','center',true),P.BH)));ws['!rows'].push({hpx:28});
+  list.forEach(([brand,d],i)=>{
+    const row=3+i,bg=i%2===0?'FFFFFF':'F8FAFC';
+    xCell(ws,row,0,brand,xStyle(xFont('Calibri',9,true,'0F172A'),bg,xAlign('left','center'),P.BD));
+    xCell(ws,row,1,d.count,xStyle(xFont('Calibri',9,false,'334155'),bg,xAlign('center','center'),P.BD));
+    xCell(ws,row,2,d.save,xStyle(xFont('Calibri',9,true,P.DEC_C),bg,xAlign('right','center'),P.BD,'#,##0'));
+    xCell(ws,row,3,(d.pct/d.count*100).toFixed(1)+'%',xStyle(xFont('Calibri',9,true,P.DEC_C),bg,xAlign('center','center'),P.BD));
+    xCell(ws,row,4,d.best?d.best.name:'',xStyle(xFont('Calibri',9,false,'0F172A'),bg,xAlign('left','center',true),P.BD));
+    xCell(ws,row,5,d.best?(d.best.pctPromo*100).toFixed(1)+'%':'',xStyle(xFont('Calibri',9,true,P.DEC_C),bg,xAlign('center','center'),P.BD));
+    ws['!rows'].push({hpx:22});
+  });
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:list.length+2,c:nc-1}});
+  XLSX.utils.book_append_sheet(wb,ws,'Tom Tat Hang');
+}
+function exportPromoXlsx(){
+  const rows=getPromoFiltered().filter(r=>r.save>=PROMO_MIN_SAVE&&r.pctPromo>=PROMO_MIN_PCT)
+    .sort((a,b)=>(b.dealScore-a.dealScore)||(b.pctPromo-a.pctPromo)||(b.save-a.save));
+  if(!rows.length){toast(`Không có deal đủ mạnh để xuất (≥ ${(PROMO_MIN_PCT*100).toFixed(0)}% và ≥ ${fmtNum(PROMO_MIN_SAVE)}đ)`,false);return;}
+  try{
+    const wb=XLSX.utils.book_new();
+    buildPromoReportSheet(wb,rows);
+    buildPromoBrandSheet(wb,rows);
+    const fname=`CoHoiBanHang_TopDeal_${tplName.replace(/[\s–—\/]+/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(wb,fname,{cellStyles:true});
+    toast(`✓ Xuất file đẹp: ${Math.min(rows.length,PROMO_EXPORT_LIMIT)} deal đáng gửi`);
+  }catch(e){toast('Lỗi xuất KM: '+e.message,false);console.error(e);}
+}
+
 // ═══════════════════════════════════════════════════════
 //  COPY CSV
 // ═══════════════════════════════════════════════════════
@@ -1004,7 +1289,7 @@ function copyCSV(){
 //  RESET
 // ═══════════════════════════════════════════════════════
 function resetAll(){
-  rawN=rawM=null;allRows=[];activeF='all';sortCol=null;sortDir=1;
+  rawN=rawM=null;allRows=[];promoRows=[];activeF='all';sortCol=null;sortDir=1;
   ['N','M'].forEach(s=>{
     $('dz'+s).classList.remove('ok','drag');
     $('d'+s+'-nm').textContent=`File giá ngày ${s} (${s==='N'?'cũ':'mới'})`;
@@ -1012,7 +1297,9 @@ function resetAll(){
     $('f'+s).value='';
   });
   $('results').style.display='none';
+  $('promoCard').style.display='none';
   $('btnCmp').disabled=true;
+  $('btnPromo').disabled=true;
   toast('Đã reset');
 }
 
@@ -1454,7 +1741,7 @@ function doExp(rows,suffix){
     buildS2(wb,rows,lN,lM);
     buildS3(wb,rows,lN,lM);
     const fname=`SoSanhGia_${tplName.replace(/[\s–—\/]+/g,'_')}_${suffix}_${new Date().toISOString().slice(0,10)}.xlsx`;
-    XLSX.writeFile(wb,fname);
+    XLSX.writeFile(wb,fname,{cellStyles:true});
     toast(`✓ Xuất ${rows.length} SP → ${fname.slice(0,42)}`);
   }catch(e){toast('Lỗi xuất: '+e.message,false);console.error(e);}
 }
@@ -1468,7 +1755,7 @@ function doExpFull(rows){
     buildS3(wb,rows,lN,lM);
     buildS4(wb,rows,lN,lM);
     const fname=`SoSanhGia_FULL_${tplName.replace(/[\s–—\/]+/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
-    XLSX.writeFile(wb,fname);
+    XLSX.writeFile(wb,fname,{cellStyles:true});
     toast(`✓ Xuất đầy đủ 4 sheet — ${rows.length} SP`);
   }catch(e){toast('Lỗi xuất: '+e.message,false);console.error(e);}
 }
@@ -1752,6 +2039,272 @@ function setupAutoDate(){
   lM.addEventListener('focus',()=>{if(lM.value==='Ngày M'){lM.value=new Date().toLocaleDateString('vi-VN');lM.select();}});
   lN.addEventListener('focus',()=>{if(lN.value==='Ngày N'){const d=new Date();d.setDate(d.getDate()-7);lN.value=d.toLocaleDateString('vi-VN');lN.select();}});
 }
+
+
+/* =========================================================
+   V8 UPGRADE - Promo dashboard filters + polished export
+   ========================================================= */
+(function upgradeV8(){
+  const css=document.createElement('style');
+  css.textContent=`
+  .v8-panel{background:linear-gradient(135deg,color-mix(in srgb,var(--ac) 8%,var(--bg2)),var(--bg2));border:1px solid var(--bd);border-radius:12px;padding:12px;margin:10px 0;display:flex;flex-direction:column;gap:10px}
+  .v8-title{font-size:12px;font-weight:700;color:var(--t0);display:flex;align-items:center;gap:8px}
+  .v8-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end}
+  .v8-field label{display:block;font-size:10px;color:var(--t2);font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
+  .v8-field select,.v8-field input{width:100%;background:var(--bg1);border:1px solid var(--bd);border-radius:8px;color:var(--t0);padding:7px 9px;font-size:12px;outline:none;font-family:var(--font)}
+  .v8-field select:focus,.v8-field input:focus{border-color:var(--ac);box-shadow:0 0 0 3px var(--acs)}
+  .brand-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;max-height:92px;overflow:auto;padding:2px}
+  .brand-pill{border:1px solid var(--bd);background:var(--bg1);color:var(--t2);border-radius:999px;padding:5px 10px;font-size:11px;cursor:pointer;user-select:none;transition:.15s;font-weight:600}
+  .brand-pill:hover{border-color:var(--ac);color:var(--t0)}
+  .brand-pill.on{background:var(--ac);border-color:var(--ac);color:#fff;box-shadow:0 2px 10px color-mix(in srgb,var(--ac) 25%,transparent)}
+  .deal-badge{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:3px 9px;font-size:10px;font-weight:800;white-space:nowrap}
+  .deal-best{background:#fef3c7;color:#92400e}.deal-hot{background:#fee2e2;color:#991b1b}.deal-top{background:#dcfce7;color:#065f46}.deal-good{background:#e0f2fe;color:#075985}
+  .score-box{display:inline-flex;min-width:38px;justify-content:center;border-radius:7px;padding:3px 6px;background:var(--acs);color:var(--acl,var(--ac));font-weight:800;font-family:var(--mono)}
+  .v8-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  `;
+  document.head.appendChild(css);
+
+  function el(id){return document.getElementById(id)}
+  function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+  function hasKMText(r,kw){const k=(r.km||'').toLowerCase();return kw==='gift'?/(tặng|qua|quà|loa|voucher|phiếu|phieu|ốp|op|tai nghe|bal[oô]|balo)/i.test(k):kw==='installment'?/(trả chậm|trả góp|lai suất|lãi suất|0%|home|mcredit|fe credit)/i.test(k):kw==='voucher'?/(voucher|phiếu|phieu|coupon|mã giảm|ma giam|cashback)/i.test(k):true;}
+  window._v8Brands=[];
+  window._v8SelectedBrands=new Set();
+
+  function installPromoPanel(){
+    const body=el('promoStats')?.parentElement;
+    if(!body || el('v8PromoPanel'))return;
+    const panel=document.createElement('div');
+    panel.id='v8PromoPanel';
+    panel.className='v8-panel';
+    panel.innerHTML=`
+      <div class="v8-title">🎛 Bộ lọc báo cáo gửi ngay</div>
+      <div class="v8-grid">
+        <div class="v8-field"><label>Hãng</label><select id="v8BrandSelect" onchange="v8SelectBrand(this.value)"><option value="">Tất cả hãng</option></select></div>
+        <div class="v8-field"><label>% giảm tối thiểu</label><select id="v8MinPct" onchange="renderPromoTbl();renderPromoChart()"><option value="0.05">≥ 5%</option><option value="0.08">≥ 8%</option><option value="0.10" selected>≥ 10%</option><option value="0.15">≥ 15%</option><option value="0.20">≥ 20%</option><option value="0.30">≥ 30%</option></select></div>
+        <div class="v8-field"><label>Tiết kiệm tối thiểu</label><select id="v8MinSave" onchange="renderPromoTbl();renderPromoChart()"><option value="100000">≥ 100K</option><option value="300000">≥ 300K</option><option value="500000" selected>≥ 500K</option><option value="1000000">≥ 1 triệu</option><option value="2000000">≥ 2 triệu</option><option value="5000000">≥ 5 triệu</option></select></div>
+        <div class="v8-field"><label>Khoảng giá KM</label><select id="v8PriceRange" onchange="renderPromoTbl();renderPromoChart()"><option value="">Tất cả</option><option value="0-5000000">Dưới 5 triệu</option><option value="5000000-10000000">5 - 10 triệu</option><option value="10000000-20000000">10 - 20 triệu</option><option value="20000000-50000000">20 - 50 triệu</option><option value="50000000-999999999">Trên 50 triệu</option></select></div>
+        <div class="v8-field"><label>Loại ưu đãi</label><select id="v8PromoType" onchange="renderPromoTbl();renderPromoChart()"><option value="">Tất cả</option><option value="gift">Có quà/voucher</option><option value="installment">Có trả góp/trả chậm</option><option value="voucher">Có voucher/cashback</option></select></div>
+        <div class="v8-field"><label>Số dòng xuất</label><select id="v8TopLimit"><option value="20">Top 20</option><option value="30" selected>Top 30</option><option value="50">Top 50</option><option value="100">Top 100</option><option value="9999">Tất cả</option></select></div>
+      </div>
+      <div class="brand-pills" id="v8BrandPills"></div>
+      <div class="v8-actions">
+        <button class="btn btn-ac btn-sm" onclick="exportPromoXlsx()">📊 Xuất Excel đẹp</button>
+        <button class="btn btn-gn btn-sm" onclick="v8QuickBest()">🔥 Chỉ BEST/HOT</button>
+        <button class="btn btn-ghost btn-sm" onclick="v8ResetPromoFilters()">↺ Reset lọc</button>
+        <span class="sec-sub">File xuất có Dashboard + Top Deal + Theo hãng + Full Data, cắt gửi là xong.</span>
+      </div>`;
+    body.insertBefore(panel,el('promoSum')?.nextSibling||body.firstChild);
+  }
+
+  window.v8SelectBrand=function(b){
+    window._v8SelectedBrands.clear();
+    if(b) window._v8SelectedBrands.add(b);
+    document.querySelectorAll('.brand-pill').forEach(x=>x.classList.toggle('on',!b?x.dataset.brand==='':x.dataset.brand===b));
+    const old=el('promoBrand'); if(old) old.value=b||'';
+    renderPromoTbl();renderPromoChart();
+  }
+  window.v8ToggleBrand=function(b){
+    if(!b){window._v8SelectedBrands.clear();}
+    else{
+      if(window._v8SelectedBrands.has(b))window._v8SelectedBrands.delete(b);else window._v8SelectedBrands.add(b);
+    }
+    document.querySelectorAll('.brand-pill').forEach(x=>x.classList.toggle('on',x.dataset.brand===''?!window._v8SelectedBrands.size:window._v8SelectedBrands.has(x.dataset.brand)));
+    const sel=el('v8BrandSelect'); if(sel)sel.value=window._v8SelectedBrands.size===1?[...window._v8SelectedBrands][0]:'';
+    const old=el('promoBrand'); if(old)old.value=window._v8SelectedBrands.size===1?[...window._v8SelectedBrands][0]:'';
+    renderPromoTbl();renderPromoChart();
+  }
+  window.v8ResetPromoFilters=function(){
+    window._v8SelectedBrands.clear();
+    if(el('v8BrandSelect'))el('v8BrandSelect').value='';
+    if(el('v8MinPct'))el('v8MinPct').value='0.10';
+    if(el('v8MinSave'))el('v8MinSave').value='500000';
+    if(el('v8PriceRange'))el('v8PriceRange').value='';
+    if(el('v8PromoType'))el('v8PromoType').value='';
+    if(el('promoSearch'))el('promoSearch').value='';
+    renderPromoTbl();renderPromoChart();
+  }
+  window.v8QuickBest=function(){
+    if(el('v8MinPct'))el('v8MinPct').value='0.15';
+    if(el('v8MinSave'))el('v8MinSave').value='1000000';
+    renderPromoTbl();renderPromoChart();
+  }
+
+  const oldDoPromo=window.doPromo;
+  window.doPromo=function(){
+    oldDoPromo();
+    installPromoPanel();
+    window._v8Brands=[...new Set(promoRows.map(r=>r.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi'));
+    const opts='<option value="">Tất cả hãng</option>'+window._v8Brands.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');
+    if(el('v8BrandSelect'))el('v8BrandSelect').innerHTML=opts;
+    const pills=['',...window._v8Brands].map(b=>`<button type="button" class="brand-pill ${b===''?'on':''}" data-brand="${esc(b)}" onclick="v8ToggleBrand('${String(b).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${b||'Tất cả'}</button>`).join('');
+    if(el('v8BrandPills'))el('v8BrandPills').innerHTML=pills;
+    renderPromoTbl();renderPromoChart();
+  }
+
+  window.getPromoFiltered=function(){
+    let rows=[...promoRows];
+    const oldBrand=el('promoBrand')?.value||'';
+    const selected=window._v8SelectedBrands||new Set();
+    if(selected.size) rows=rows.filter(r=>selected.has(r.brand));
+    else if(oldBrand) rows=rows.filter(r=>r.brand===oldBrand);
+    const q=(el('promoSearch')?.value||'').toLowerCase().trim();
+    if(q) rows=rows.filter(r=>String(r.name).toLowerCase().includes(q)||String(r.ma).includes(q)||String(r.km||'').toLowerCase().includes(q));
+    const minPct=+(el('v8MinPct')?.value||PROMO_MIN_PCT);
+    const minSave=+(el('v8MinSave')?.value||PROMO_MIN_SAVE);
+    rows=rows.filter(r=>r.pctPromo>=minPct && r.save>=minSave);
+    const pr=el('v8PriceRange')?.value||'';
+    if(pr){const [lo,hi]=pr.split('-').map(Number);rows=rows.filter(r=>(r.pricePromo||0)>=lo&&(r.pricePromo||0)<hi);}
+    const kind=el('v8PromoType')?.value||'';
+    if(kind) rows=rows.filter(r=>hasKMText(r,kind));
+    const mode=el('promoSort')?.value||'pct';
+    rows.sort((a,b)=>{
+      if(mode==='amount')return (b.save-a.save)||(b.pctPromo-a.pctPromo)||(b.dealScore-a.dealScore);
+      if(mode==='price')return (a.pricePromo-b.pricePromo)||(b.dealScore-a.dealScore);
+      return (b.dealScore-a.dealScore)||(b.pctPromo-a.pctPromo)||(b.save-a.save);
+    });
+    return rows;
+  }
+
+  function dealClass(r,i){if(i===0||r.dealScore>=90)return 'deal-best';if(r.pctPromo>=.18||r.save>=3000000)return 'deal-hot';if(r.pctPromo>=.12||r.save>=1000000)return 'deal-top';return 'deal-good';}
+  function dealLabel(r,i){if(i===0||r.dealScore>=90)return 'BEST DEAL';if(r.pctPromo>=.18||r.save>=3000000)return 'HOT DEAL';if(r.pctPromo>=.12||r.save>=1000000)return 'TOP DEAL';return 'GOOD DEAL';}
+
+  window.renderPromoTbl=function(){
+    installPromoPanel();
+    const rows=getPromoFiltered();
+    const lim=Math.min(rows.length,300);
+    if(el('promoRcnt')) el('promoRcnt').textContent=`${lim} / ${rows.length} SP`;
+    const tbody=el('promoBody'); if(!tbody)return;
+    tbody.innerHTML=rows.slice(0,300).map((r,i)=>`<tr>
+      <td style="text-align:center;font-weight:800;color:var(--ac)">${i+1}</td>
+      <td><span class="mono">${esc(r.ma)}</span></td>
+      <td style="font-weight:600">${esc(r.name)} <span class="score-box">${r.dealScore}</span></td>
+      <td style="text-align:center"><span style="font-size:10px;color:var(--t2);background:var(--bg3);padding:2px 7px;border-radius:4px;white-space:nowrap">${esc(r.brand)}</span></td>
+      <td class="nr" style="color:var(--t2)">${fmtP(r.gg)}</td>
+      <td class="nr" style="font-weight:800;color:var(--gn)">${fmtP(r.pricePromo)}</td>
+      <td class="ng">-${fmtP(r.save)}</td>
+      <td class="ng">${(r.pctPromo*100).toFixed(1)}%</td>
+      <td style="text-align:center"><span class="deal-badge ${dealClass(r,i)}">${dealLabel(r,i)}</span></td>
+      <td><div class="km-t">${esc(r.km||'Giảm trực tiếp trên giá bán')}</div></td>
+    </tr>`).join('') || `<tr><td colspan="10" style="text-align:center;padding:28px;color:var(--t2)">Không có sản phẩm khớp bộ lọc.</td></tr>`;
+  }
+
+  window.renderPromoChart=function(){
+    const rows=getPromoFiltered().slice(0,14);
+    const box=el('promoChart'); if(!box)return;
+    if(!rows.length){box.innerHTML='';return;}
+    const mx=Math.max(...rows.map(r=>r.dealScore||1));
+    box.innerHTML=`<div class="chart-area"><div class="chart-title">TOP DEAL SCORE — theo bộ lọc hiện tại</div>`+rows.map(r=>{
+      const w=Math.max(5,Math.round((r.dealScore||1)/mx*92));
+      const nm=r.name.length>32?r.name.slice(0,30)+'…':r.name;
+      return `<div class="bar-row"><div class="bar-lbl" title="${esc(r.name)}">${esc(nm)}</div><div class="bar-track"><div class="bar-fill bf-g" style="width:${w}%">${w>22?r.dealScore:''}</div></div><div class="bar-val">${(r.pctPromo*100).toFixed(1)}% · ${fmtP(r.save)}đ</div></div>`;
+    }).join('')+'</div>';
+  }
+
+  window.renderPromoStats=function(){
+    const rows=getPromoFiltered ? getPromoFiltered() : promoRows;
+    const total=rows.length;
+    const bestPct=total?rows.reduce((a,b)=>b.pctPromo>a.pctPromo?b:a):null;
+    const bestAmt=total?rows.reduce((a,b)=>b.save>a.save?b:a):null;
+    const avg=total?rows.reduce((s,r)=>s+r.pctPromo,0)/total:0;
+    const brands=new Set(rows.map(r=>r.brand)).size;
+    if(el('promoStats'))el('promoStats').innerHTML=[
+      {v:total,l:'Deal sau lọc',c:'cb'},
+      {v:brands,l:'Hãng',c:'cp'},
+      {v:bestPct?(bestPct.pctPromo*100).toFixed(0)+'%':'—',l:'% giảm cao nhất',c:'cg'},
+      {v:bestAmt?fmtP(bestAmt.save):'—',l:'Tiết kiệm cao nhất',c:'cg'},
+      {v:avg?(avg*100).toFixed(1)+'%':'—',l:'Giảm TB',c:'ca'},
+    ].map(s=>`<div class="stat"><div class="sv ${s.c}">${s.v}</div><div class="sl">${s.l}</div></div>`).join('');
+    if(el('promoSum'))el('promoSum').innerHTML=[
+      {ic:'🏆',l:'Deal mạnh nhất',v:bestPct?bestPct.name.slice(0,34)+'… · '+(bestPct.pctPromo*100).toFixed(1)+'%':'—',c:'cg'},
+      {ic:'💰',l:'Tiết kiệm nhiều nhất',v:bestAmt?bestAmt.name.slice(0,34)+'… · '+fmtP(bestAmt.save)+'đ':'—',c:'cg'},
+    ].map(i=>`<div class="spill"><span>${i.ic}</span><span>${i.l}: <strong class="${i.c}">${esc(i.v)}</strong></span></div>`).join('');
+  }
+
+  const oldRT=window.renderPromoTbl;
+  const oldRC=window.renderPromoChart;
+  // refresh KPI whenever table/chart renders from filter changes
+  const refreshKpi=()=>setTimeout(()=>{ if(window.renderPromoStats && promoRows?.length) window.renderPromoStats(); },0);
+  document.addEventListener('change',e=>{ if(String(e.target?.id||'').startsWith('v8')||e.target?.id==='promoSort'||e.target?.id==='promoBrand')refreshKpi(); });
+  document.addEventListener('input',e=>{ if(e.target?.id==='promoSearch')refreshKpi(); });
+
+  function excelStyle(font,fill,align,border,numFmt){return xStyle(font,fill,align,border,numFmt)}
+  function pctFmt(v){return Number(v||0)}
+  function money(v){return Number(v||0)}
+  function tagFor(r,i){return dealLabel(r,i)}
+  function colorFor(r,i){
+    if(i===0)return {bg:'FEF3C7',fg:'92400E'};
+    if(r.dealScore>=90)return {bg:'FDE68A',fg:'78350F'};
+    if(r.pctPromo>=.18||r.save>=3000000)return {bg:'FEE2E2',fg:'991B1B'};
+    if(r.pctPromo>=.12||r.save>=1000000)return {bg:'DCFCE7',fg:'065F46'};
+    return {bg:(i%2?'F8FAFC':'FFFFFF'),fg:'334155'};
+  }
+
+  function buildDashboard(wb,rows,label){
+    const ws=xSheet([18,18,18,18,18,18,18,18,18,18],34), nc=10;
+    ws['!views']=[{showGridLines:false}];ws['!margins']={left:.25,right:.25,top:.35,bottom:.35};ws['!pageSetup']={orientation:'landscape',fitToWidth:1,fitToHeight:1};
+    xRow(ws,0,nc,'CƠ HỘI BÁN HÀNG HÔM NAY',excelStyle(xFont('Arial',20,true,'FFFFFF'),'0F172A',xAlign('center','center'),null));xMerge(ws,0,0,0,nc-1);
+    xRow(ws,1,nc,`${tplName} | ${label||''} | ${new Date().toLocaleDateString('vi-VN')}`,excelStyle(xFont('Arial',11,false,'E2E8F0'),'1E293B',xAlign('center','center'),null));xMerge(ws,1,0,1,nc-1);
+    ws['!rows'].push({hpx:34},{hpx:22},{hpx:10});
+    const totalSave=rows.reduce((s,r)=>s+r.save,0), avg=rows.length?rows.reduce((s,r)=>s+r.pctPromo,0)/rows.length:0, brands=new Set(rows.map(r=>r.brand)).size;
+    const cards=[['DEAL ĐÁNG GỬI',rows.length,'sản phẩm','DBEAFE','1D4ED8'],['HÃNG CÓ DEAL',brands,'hãng','EDE9FE','6D28D9'],['GIẢM TRUNG BÌNH',(avg*100).toFixed(1)+'%','trên danh sách','DCFCE7','047857'],['TỔNG TIẾT KIỆM',fmtNum(totalSave)+'đ','cộng các deal','FEF3C7','92400E'],['BEST DEAL',rows[0]?.name||'—',rows[0]?`${(rows[0].pctPromo*100).toFixed(1)}% | ${fmtNum(rows[0].save)}đ`:'' ,'FEE2E2','991B1B']];
+    cards.forEach((k,idx)=>{const c1=idx*2,c2=c1+1;[3,4,5].forEach((r,j)=>{xCell(ws,r,c1,j===0?k[0]:j===1?k[1]:k[2],excelStyle(xFont('Arial',j===1?12:9,j<2,k[4]),k[3],xAlign('center','center',true),'FFFFFF'));xCell(ws,r,c2,'',excelStyle(xFont('Arial',9,false,k[4]),k[3],xAlign('center','center',true),'FFFFFF'));});xMerge(ws,3,c1,3,c2);xMerge(ws,4,c1,4,c2);xMerge(ws,5,c1,5,c2);});
+    ws['!rows'].push({hpx:10},{hpx:22},{hpx:30},{hpx:18});
+    const header=8;['TOP','Mã SP','Tên sản phẩm','Hãng','Giá gốc','Giá KM','Tiết kiệm','% giảm','Điểm','Đánh giá'].forEach((h,c)=>xCell(ws,header,c,h,excelStyle(xFont('Arial',10,true,'FFFFFF'),'1E40AF',xAlign('center','center',true),'64748B')));ws['!rows'].push({hpx:26});
+    rows.slice(0,10).forEach((r,i)=>{const row=header+1+i,cl=colorFor(r,i);[i+1,r.ma,r.name,r.brand,money(r.gg),money(r.pricePromo),money(r.save),pctFmt(r.pctPromo),r.dealScore,tagFor(r,i)].forEach((v,c)=>xCell(ws,row,c,v,excelStyle(xFont(c===2?'Arial':c===1?'Courier New':'Arial',9,c===2||c>=6, c>=6?cl.fg:'0F172A'),cl.bg,xAlign(c>=4&&c<=7?'right':c===2?'left':'center','center',true),'CBD5E1',c>=4&&c<=6?'#,##0':c===7?'0.0%':undefined)));ws['!rows'].push({hpx:i<3?30:24});});
+    ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:header+Math.min(rows.length,10),c:nc-1}});
+    XLSX.utils.book_append_sheet(wb,ws,'Dashboard');
+  }
+
+  function buildTopDeal(wb,rows){
+    const ws=xSheet([6,18,48,14,16,16,16,11,10,15,60],34), nc=11;
+    ws['!views']=[{showGridLines:false}];ws['!margins']={left:.25,right:.25,top:.35,bottom:.35};ws['!pageSetup']={orientation:'landscape',fitToWidth:1,fitToHeight:0};
+    xRow(ws,0,nc,`TOP DEAL GỬI NGAY - ${tplName.toUpperCase()}`,excelStyle(xFont('Arial',18,true,'FFFFFF'),'0F172A',xAlign('center','center'),null));xMerge(ws,0,0,0,nc-1);
+    xRow(ws,1,nc,`Đã lọc theo tiêu chí: % giảm, tiền giảm, hãng, khoảng giá và loại ưu đãi`,excelStyle(xFont('Arial',10,false,'E2E8F0'),'1E293B',xAlign('center','center'),null));xMerge(ws,1,0,1,nc-1);
+    ws['!rows'].push({hpx:32},{hpx:22},{hpx:8});
+    const hdr=3, headers=['TOP','Mã SP','Tên sản phẩm','Hãng','Giá gốc','Giá KM','Tiết kiệm','% giảm','Điểm','Đánh giá','Chi tiết KM'];
+    const colors=['1E3A8A','1E3A8A','1D4ED8','1D4ED8','14532D','064E3B','7C2D12','7C2D12','6D28D9','92400E','065F46'];
+    headers.forEach((h,c)=>xCell(ws,hdr,c,h,excelStyle(xFont('Arial',10,true,'FFFFFF'),colors[c],xAlign('center','center',true),'334155')));ws['!rows'].push({hpx:28});
+    rows.forEach((r,i)=>{const row=hdr+1+i,cl=colorFor(r,i);const vals=[i+1,r.ma,r.name,r.brand,money(r.gg),money(r.pricePromo),money(r.save),pctFmt(r.pctPromo),r.dealScore,tagFor(r,i),r.km||'Giảm trực tiếp trên giá bán']; vals.forEach((v,c)=>xCell(ws,row,c,v,excelStyle(xFont(c===1?'Courier New':'Arial',c===10?8:9,c===2||c>=6,c>=6?cl.fg:(c===1?'1D4ED8':'0F172A')),cl.bg,xAlign(c>=4&&c<=7?'right':c===2||c===10?'left':'center','center',true),'CBD5E1',c>=4&&c<=6?'#,##0':c===7?'0.0%':undefined)));ws['!rows'].push({hpx:i<3?34:25});});
+    const last=hdr+rows.length;ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:hdr,c:0},e:{r:last,c:nc-1}})};ws['!freeze']={xSplit:0,ySplit:4};ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:last,c:nc-1}});XLSX.utils.book_append_sheet(wb,ws,'Top Deal');
+  }
+
+  function buildBrand(wb,rows){
+    const map={};rows.forEach(r=>{const k=r.brand||'Khác';if(!map[k])map[k]={count:0,save:0,pct:0,best:null};const d=map[k];d.count++;d.save+=r.save;d.pct+=r.pctPromo;if(!d.best||r.dealScore>d.best.dealScore)d.best=r;});
+    const list=Object.entries(map).sort((a,b)=>b[1].save-a[1].save);const ws=xSheet([22,12,18,14,48,14],34),nc=6;ws['!views']=[{showGridLines:false}];
+    xRow(ws,0,nc,'TÓM TẮT THEO HÃNG',excelStyle(xFont('Arial',16,true,'FFFFFF'),'0F172A',xAlign('center','center'),null));xMerge(ws,0,0,0,nc-1);ws['!rows'].push({hpx:32},{hpx:8});
+    ['Hãng','Số deal','Tổng tiết kiệm','Giảm TB','Deal tốt nhất','Điểm'].forEach((h,c)=>xCell(ws,2,c,h,excelStyle(xFont('Arial',10,true,'FFFFFF'),'1E40AF',xAlign('center','center',true),'64748B')));ws['!rows'].push({hpx:26});
+    list.forEach(([brand,d],i)=>{const row=3+i,bg=i%2?'F8FAFC':'FFFFFF';[brand,d.count,money(d.save),d.pct/d.count,d.best?.name||'',d.best?.dealScore||''].forEach((v,c)=>xCell(ws,row,c,v,excelStyle(xFont('Arial',9,c===0||c===2,'0F172A'),bg,xAlign(c===2?'right':c===4?'left':'center','center',true),'CBD5E1',c===2?'#,##0':c===3?'0.0%':undefined)));ws['!rows'].push({hpx:24});});
+    ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:2,c:0},e:{r:list.length+2,c:nc-1}})};ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:list.length+2,c:nc-1}});XLSX.utils.book_append_sheet(wb,ws,'Theo Hang');
+  }
+
+  function buildFull(wb,rows){
+    const ws=xSheet([6,18,48,14,16,16,16,11,10,15,60],24),nc=11;ws['!views']=[{showGridLines:false}];
+    ['TOP','Mã SP','Tên sản phẩm','Hãng','Giá gốc','Giá KM','Tiết kiệm','% giảm','Điểm','Đánh giá','Chi tiết KM'].forEach((h,c)=>xCell(ws,0,c,h,excelStyle(xFont('Arial',10,true,'FFFFFF'),'334155',xAlign('center','center',true),'1F2937')));
+    rows.forEach((r,i)=>{const row=1+i,bg=i%2?'F8FAFC':'FFFFFF';[i+1,r.ma,r.name,r.brand,money(r.gg),money(r.pricePromo),money(r.save),pctFmt(r.pctPromo),r.dealScore,tagFor(r,i),r.km||''].forEach((v,c)=>xCell(ws,row,c,v,excelStyle(xFont(c===1?'Courier New':'Arial',c===10?8:9,c===2||c>=6,c>=6?'065F46':'0F172A'),bg,xAlign(c>=4&&c<=7?'right':c===2||c===10?'left':'center','center',true),'CBD5E1',c>=4&&c<=6?'#,##0':c===7?'0.0%':undefined)));ws['!rows'].push({hpx:23});});
+    ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length,c:nc-1}})};ws['!freeze']={xSplit:0,ySplit:1};ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length,c:nc-1}});XLSX.utils.book_append_sheet(wb,ws,'Full Data');
+  }
+
+  window.exportPromoXlsx=function(){
+    const limit=+(el('v8TopLimit')?.value||30);
+    let rows=getPromoFiltered();
+    if(limit<9999) rows=rows.slice(0,limit);
+    if(!rows.length){toast('Không có deal khớp bộ lọc để xuất',false);return;}
+    try{
+      const wb=XLSX.utils.book_new();
+      const label=(rawM?el('lM')?.value:el('lN')?.value)||new Date().toLocaleDateString('vi-VN');
+      buildDashboard(wb,rows,label);buildTopDeal(wb,rows);buildBrand(wb,rows);buildFull(wb,rows);
+      const brandTxt=window._v8SelectedBrands?.size?[...window._v8SelectedBrands].join('_'):'TatCaHang';
+      const fname=`CoHoiBanHang_${tplName.replace(/[\s–—\/]+/g,'_')}_${brandTxt.replace(/[\s–—\/]+/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
+      XLSX.writeFile(wb,fname,{cellStyles:true});
+      toast(`✓ Xuất Excel đẹp ${rows.length} deal: ${fname}`);
+    }catch(e){toast('Lỗi xuất Excel: '+e.message,false);console.error(e);}
+  }
+
+  // Enhance basic export panel labels too
+  document.addEventListener('DOMContentLoaded',installPromoPanel);
+  installPromoPanel();
+})();
+
 
 // ═══════════════════════════════════════════════════════
 //  INIT
