@@ -523,6 +523,7 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
       <span id="promoTitle" class="sec-sub" style="margin-left:4px"></span>
       <span id="promoCnt" style="font-size:10px;color:var(--t2);background:var(--bg3);padding:2px 8px;border-radius:20px;margin-left:6px"></span>
       <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-gn btn-sm" onclick="copyPromoForStaff()" title="Copy nhanh gửi nhân viên">📋 Copy gửi NV</button>
         <button class="btn btn-ghost btn-sm" onclick="copyPromoCSV()" title="Copy danh sách KM">📋 CSV</button>
         <button class="btn btn-ac btn-sm" onclick="exportPromoXlsx()" title="Xuất Excel gửi ngay">📊 Xuất file gửi ngay</button>
       </div>
@@ -2082,12 +2083,13 @@ function setupAutoDate(){
         <div class="v8-field"><label>Hãng</label><select id="v8BrandSelect" onchange="v8SelectBrand(this.value)"><option value="">Tất cả hãng</option></select></div>
         <div class="v8-field"><label>% giảm tối thiểu</label><select id="v8MinPct" onchange="renderPromoTbl();renderPromoChart()"><option value="0.05">≥ 5%</option><option value="0.08">≥ 8%</option><option value="0.10" selected>≥ 10%</option><option value="0.15">≥ 15%</option><option value="0.20">≥ 20%</option><option value="0.30">≥ 30%</option></select></div>
         <div class="v8-field"><label>Tiết kiệm tối thiểu</label><select id="v8MinSave" onchange="renderPromoTbl();renderPromoChart()"><option value="100000">≥ 100K</option><option value="300000">≥ 300K</option><option value="500000" selected>≥ 500K</option><option value="1000000">≥ 1 triệu</option><option value="2000000">≥ 2 triệu</option><option value="5000000">≥ 5 triệu</option></select></div>
-        <div class="v8-field"><label>Khoảng giá KM</label><select id="v8PriceRange" onchange="renderPromoTbl();renderPromoChart()"><option value="">Tất cả</option><option value="0-5000000">Dưới 5 triệu</option><option value="5000000-10000000">5 - 10 triệu</option><option value="10000000-20000000">10 - 20 triệu</option><option value="20000000-50000000">20 - 50 triệu</option><option value="50000000-999999999">Trên 50 triệu</option></select></div>
+        <div class="v8-field"><label>Phân khúc giá gốc</label><select id="v8PriceRange" onchange="renderPromoTbl();renderPromoChart()"><option value="">Tất cả</option><option value="0-5000000">Dưới 5 triệu</option><option value="5000000-10000000">5 - 10 triệu</option><option value="10000000-15000000">10 - 15 triệu</option><option value="15000000-20000000">15 - 20 triệu</option><option value="20000000-30000000">20 - 30 triệu</option><option value="30000000-50000000">30 - 50 triệu</option><option value="50000000-999999999">Trên 50 triệu</option></select></div>
         <div class="v8-field"><label>Loại ưu đãi</label><select id="v8PromoType" onchange="renderPromoTbl();renderPromoChart()"><option value="">Tất cả</option><option value="gift">Có quà/voucher</option><option value="installment">Có trả góp/trả chậm</option><option value="voucher">Có voucher/cashback</option></select></div>
         <div class="v8-field"><label>Số dòng xuất</label><select id="v8TopLimit"><option value="20">Top 20</option><option value="30" selected>Top 30</option><option value="50">Top 50</option><option value="100">Top 100</option><option value="9999">Tất cả</option></select></div>
       </div>
       <div class="brand-pills" id="v8BrandPills"></div>
       <div class="v8-actions">
+        <button class="btn btn-gn btn-sm" onclick="copyPromoForStaff()">📋 Copy gửi NV</button>
         <button class="btn btn-ac btn-sm" onclick="exportPromoXlsx()">📊 Xuất Excel đẹp</button>
         <button class="btn btn-gn btn-sm" onclick="v8QuickBest()">🔥 Chỉ BEST/HOT</button>
         <button class="btn btn-ghost btn-sm" onclick="v8ResetPromoFilters()">↺ Reset lọc</button>
@@ -2153,7 +2155,7 @@ function setupAutoDate(){
     const minSave=+(el('v8MinSave')?.value||PROMO_MIN_SAVE);
     rows=rows.filter(r=>r.pctPromo>=minPct && r.save>=minSave);
     const pr=el('v8PriceRange')?.value||'';
-    if(pr){const [lo,hi]=pr.split('-').map(Number);rows=rows.filter(r=>(r.pricePromo||0)>=lo&&(r.pricePromo||0)<hi);}
+    if(pr){const [lo,hi]=pr.split('-').map(Number);rows=rows.filter(r=>(r.gg||0)>=lo&&(r.gg||0)<hi);}
     const kind=el('v8PromoType')?.value||'';
     if(kind) rows=rows.filter(r=>hasKMText(r,kind));
     const mode=el('promoSort')?.value||'pct';
@@ -2284,6 +2286,37 @@ function setupAutoDate(){
     ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length,c:nc-1}})};ws['!freeze']={xSplit:0,ySplit:1};ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length,c:nc-1}});XLSX.utils.book_append_sheet(wb,ws,'Full Data');
   }
 
+
+  window.copyPromoForStaff=function(){
+    const rows=(typeof getPromoFiltered==='function'?getPromoFiltered():promoRows).slice(0, +(el('v8TopLimit')?.value||30));
+    if(!rows.length){toast('Không có deal để copy',false);return;}
+    const brandTxt=(window._v8SelectedBrands&&window._v8SelectedBrands.size)?[...window._v8SelectedBrands].join(', '):(el('v8BrandSelect')?.value||el('promoBrand')?.value||'Tất cả hãng');
+    const prTxt=el('v8PriceRange')?.selectedOptions?.[0]?.textContent||'Tất cả phân khúc';
+    const lines=[];
+    lines.push(`🔥 CƠ HỘI BÁN HÀNG HÔM NAY - ${tplName.toUpperCase()}`);
+    lines.push(`Hãng: ${brandTxt} | Phân khúc giá gốc: ${prTxt} | Top ${rows.length}`);
+    lines.push('');
+    rows.forEach((r,i)=>{
+      lines.push(`${i+1}. ${r.ma}`);
+      lines.push(`${r.name}`);
+      lines.push(`Giá gốc: ${fmtP(r.gg)}đ`);
+      lines.push(`Giá giảm: ${fmtP(r.pricePromo)}đ`);
+      lines.push(`Tiết kiệm: ${fmtP(r.save)}đ (${(r.pctPromo*100).toFixed(1)}%)`);
+      lines.push(`KM: ${r.km||'Giảm trực tiếp trên giá bán'}`);
+      if(i<rows.length-1)lines.push('---');
+    });
+    lines.push('');
+    lines.push('Anh/chị ưu tiên tư vấn các mã trên trong hôm nay.');
+    const text=lines.join('\n');
+    const ok=()=>toast(`✓ Đã copy ${rows.length} mã để gửi nhân viên`);
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(ok).catch(()=>fallbackCopyText(text,ok));}
+    else fallbackCopyText(text,ok);
+  }
+  function fallbackCopyText(text,cb){
+    const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');cb&&cb();}catch(e){toast('Không thể copy tự động, hãy dùng CSV',false);}finally{document.body.removeChild(ta);}
+  }
+
   window.exportPromoXlsx=function(){
     const limit=+(el('v8TopLimit')?.value||30);
     let rows=getPromoFiltered();
@@ -2303,6 +2336,146 @@ function setupAutoDate(){
   // Enhance basic export panel labels too
   document.addEventListener('DOMContentLoaded',installPromoPanel);
   installPromoPanel();
+})();
+
+
+/* =========================================================
+   V8.1 - Dashboard phan khuc gia goc
+   ========================================================= */
+(function upgradePriceSegments(){
+  const css=document.createElement('style');
+  css.textContent=`
+  .seg-wrap{margin:12px 0 14px;background:linear-gradient(135deg,color-mix(in srgb,var(--gn) 7%,var(--bg2)),var(--bg2));border:1px solid var(--bd);border-radius:13px;padding:12px}
+  .seg-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .seg-title{font-size:13px;font-weight:800;color:var(--t0);display:flex;align-items:center;gap:7px}
+  .seg-sub{font-size:11px;color:var(--t2)}
+  .seg-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+  .seg-card{border:1px solid var(--bd);background:var(--bg1);border-radius:12px;padding:11px;cursor:pointer;transition:.18s;min-height:118px;position:relative;overflow:hidden}
+  .seg-card:hover{transform:translateY(-2px);border-color:var(--ac);box-shadow:0 8px 24px color-mix(in srgb,var(--ac) 16%,transparent)}
+  .seg-card.on{border-color:var(--gn);box-shadow:0 0 0 3px color-mix(in srgb,var(--gn) 18%,transparent);background:color-mix(in srgb,var(--gn) 7%,var(--bg1))}
+  .seg-name{font-size:12px;font-weight:800;color:var(--t0);margin-bottom:7px;display:flex;justify-content:space-between;gap:6px}
+  .seg-count{font-size:10px;background:var(--bg3);color:var(--t2);border-radius:999px;padding:2px 7px;white-space:nowrap}
+  .seg-kpis{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px}
+  .seg-kpi{background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:5px;text-align:center}
+  .seg-kpi b{display:block;font-size:13px;color:var(--gn);font-variant-numeric:tabular-nums}.seg-kpi span{font-size:9px;color:var(--t3)}
+  .seg-best{font-size:10px;color:var(--t2);line-height:1.35;min-height:28px}.seg-best strong{color:var(--t0)}
+  .seg-bar{height:6px;background:var(--bg4);border-radius:999px;overflow:hidden;margin-top:8px}.seg-fill{height:100%;background:linear-gradient(90deg,var(--gn),var(--ac));border-radius:999px}
+  .seg-actions{display:flex;gap:6px;flex-wrap:wrap}.seg-actions .btn{font-size:10px;padding:5px 9px}
+  `;
+  document.head.appendChild(css);
+  const SEGMENTS=[
+    {id:'0-5000000',name:'Dưới 5 triệu',lo:0,hi:5000000},
+    {id:'5000000-10000000',name:'5 - 10 triệu',lo:5000000,hi:10000000},
+    {id:'10000000-15000000',name:'10 - 15 triệu',lo:10000000,hi:15000000},
+    {id:'15000000-20000000',name:'15 - 20 triệu',lo:15000000,hi:20000000},
+    {id:'20000000-30000000',name:'20 - 30 triệu',lo:20000000,hi:30000000},
+    {id:'30000000-50000000',name:'30 - 50 triệu',lo:30000000,hi:50000000},
+    {id:'50000000-999999999',name:'Trên 50 triệu',lo:50000000,hi:999999999}
+  ];
+  function el(id){return document.getElementById(id)}
+  function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+  function shortName(s,n=30){s=String(s||'');return s.length>n?s.slice(0,n-1)+'…':s;}
+  function activeSegment(){return el('v8PriceRange')?.value||'';}
+  function baseRowsForSegment(){
+    let rows=[...(window.promoRows||promoRows||[])];
+    const selected=window._v8SelectedBrands||new Set();
+    const oldBrand=el('promoBrand')?.value||'';
+    if(selected.size) rows=rows.filter(r=>selected.has(r.brand));
+    else if(oldBrand) rows=rows.filter(r=>r.brand===oldBrand);
+    const q=(el('promoSearch')?.value||'').toLowerCase().trim();
+    if(q) rows=rows.filter(r=>String(r.name).toLowerCase().includes(q)||String(r.ma).includes(q)||String(r.km||'').toLowerCase().includes(q));
+    const minPct=+(el('v8MinPct')?.value||0);
+    const minSave=+(el('v8MinSave')?.value||0);
+    rows=rows.filter(r=>(r.pctPromo||0)>=minPct && (r.save||0)>=minSave);
+    const kind=el('v8PromoType')?.value||'';
+    if(kind){
+      const has=(r)=>{const k=String(r.km||'').toLowerCase();return kind==='gift'?/(tặng|qua|quà|voucher|phiếu|phieu|loa|tai nghe|ốp|op|balo)/i.test(k):kind==='installment'?/(trả chậm|trả góp|lai suất|lãi suất|0%|home|mcredit|fe credit)/i.test(k):kind==='voucher'?/(voucher|phiếu|phieu|coupon|cashback|mã giảm|ma giam)/i.test(k):true;};
+      rows=rows.filter(has);
+    }
+    return rows;
+  }
+  function segOf(r){const gg=+(r.gg||0);return SEGMENTS.find(s=>gg>=s.lo&&gg<s.hi);}
+  function segStats(){
+    const rows=baseRowsForSegment();
+    return SEGMENTS.map(s=>{
+      const list=rows.filter(r=>{const gg=+(r.gg||0);return gg>=s.lo&&gg<s.hi;});
+      const bestAmount=list.length?[...list].sort((a,b)=>(b.save-a.save)||(b.pctPromo-a.pctPromo))[0]:null;
+      const bestPct=list.length?[...list].sort((a,b)=>(b.pctPromo-a.pctPromo)||(b.save-a.save))[0]:null;
+      const avgPct=list.length?list.reduce((x,r)=>x+r.pctPromo,0)/list.length:0;
+      return {seg:s,count:list.length,bestAmount,bestPct,avgPct,maxSave:bestAmount?bestAmount.save:0};
+    });
+  }
+  function installSegBox(){
+    const body=el('promoStats')?.parentElement;
+    if(!body || el('v8SegBox')) return;
+    const box=document.createElement('div');
+    box.id='v8SegBox';
+    box.className='seg-wrap';
+    box.innerHTML=`<div class="seg-head"><div><div class="seg-title">💵 Phân khúc giá gốc</div><div class="seg-sub">Bấm vào phân khúc để xem mẫu giảm nhiều nhất trong khoảng giá đó. Kết hợp được với hãng, % giảm, tiền giảm và từ khóa.</div></div><div class="seg-actions"><button class="btn btn-gn btn-sm" onclick="v8CopySegmentBest()">📋 Copy top theo phân khúc</button><button class="btn btn-ghost btn-sm" onclick="v8ClearSegment()">Tất cả phân khúc</button></div></div><div class="seg-grid" id="v8SegGrid"></div>`;
+    const panel=el('v8PromoPanel');
+    if(panel && panel.nextSibling) body.insertBefore(box,panel.nextSibling); else body.insertBefore(box,el('promoSum')?.nextSibling||body.firstChild);
+  }
+  window.v8PickSegment=function(id){
+    if(el('v8PriceRange')) el('v8PriceRange').value=id;
+    renderPromoTbl();
+    if(typeof renderPromoChart==='function') renderPromoChart();
+    const card=document.querySelector(`.seg-card[data-seg="${CSS.escape(id)}"]`);
+    if(card) card.scrollIntoView({behavior:'smooth',block:'nearest'});
+  };
+  window.v8ClearSegment=function(){
+    if(el('v8PriceRange')) el('v8PriceRange').value='';
+    renderPromoTbl();
+    if(typeof renderPromoChart==='function') renderPromoChart();
+  };
+  function renderSegments(){
+    installSegBox();
+    const grid=el('v8SegGrid'); if(!grid) return;
+    const stats=segStats();
+    const max=Math.max(1,...stats.map(x=>x.maxSave));
+    const cur=activeSegment();
+    grid.innerHTML=stats.map(x=>{
+      const b=x.bestAmount;
+      const bp=x.bestPct;
+      const w=Math.max(4,Math.round((x.maxSave/max)*100));
+      return `<div class="seg-card ${cur===x.seg.id?'on':''}" data-seg="${x.seg.id}" onclick="v8PickSegment('${x.seg.id}')">
+        <div class="seg-name"><span>${x.seg.name}</span><span class="seg-count">${x.count} deal</span></div>
+        <div class="seg-kpis"><div class="seg-kpi"><b>${b?fmtP(b.save):'—'}</b><span>giảm nhiều nhất</span></div><div class="seg-kpi"><b>${bp?(bp.pctPromo*100).toFixed(1)+'%':'—'}</b><span>% cao nhất</span></div></div>
+        <div class="seg-best">Mẫu giảm tiền mạnh nhất:<br><strong>${b?esc(shortName(b.name,34)):'Chưa có deal'}</strong></div>
+        <div class="seg-best" style="margin-top:4px">Mẫu giảm % mạnh nhất: <strong>${bp?esc(shortName(bp.name,24)):'—'}</strong></div>
+        <div class="seg-bar"><div class="seg-fill" style="width:${w}%"></div></div>
+      </div>`;
+    }).join('');
+  }
+  window.v8CopySegmentBest=function(){
+    const stats=segStats().filter(x=>x.count&&x.bestAmount);
+    if(!stats.length){toast('Không có deal theo phân khúc để copy',false);return;}
+    const lines=['🔥 TOP MẪU GIẢM NHIỀU THEO PHÂN KHÚC GIÁ GỐC',''];
+    stats.forEach(x=>{
+      const r=x.bestAmount;
+      lines.push(`📌 ${x.seg.name}`);
+      lines.push(`Mã SP: ${r.ma}`);
+      lines.push(`Tên SP: ${r.name}`);
+      lines.push(`Giá gốc: ${fmtP(r.gg)}đ`);
+      lines.push(`Giá giảm: ${fmtP(r.pricePromo)}đ`);
+      lines.push(`Tiết kiệm: ${fmtP(r.save)}đ (${(r.pctPromo*100).toFixed(1)}%)`);
+      lines.push(`KM: ${r.km||'Giảm trực tiếp trên giá bán'}`);
+      lines.push('---');
+    });
+    const text=lines.join('\n');
+    const ok=()=>toast(`✓ Đã copy top ${stats.length} phân khúc`);
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok).catch(()=>{const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);ok();});
+  };
+  const oldRender=window.renderPromoTbl;
+  window.renderPromoTbl=function(){
+    if(typeof oldRender==='function') oldRender();
+    renderSegments();
+  };
+  const oldDo=window.doPromo;
+  window.doPromo=function(){
+    oldDo();
+    setTimeout(renderSegments,0);
+  };
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(renderSegments,0));
 })();
 
 
