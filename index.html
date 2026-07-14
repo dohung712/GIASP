@@ -380,18 +380,51 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
   </div>
 </div>
 
+<!-- PRODUCT CATALOG -->
+<div class="card" id="catalogCard">
+  <div class="card-head">
+    <span style="font-size:15px">📦</span>
+    <span class="sec-t">Danh mục sản phẩm</span>
+    <span id="catBadge" style="font-size:10px;color:var(--t2);background:var(--bg3);padding:2px 8px;border-radius:20px;margin-left:6px"></span>
+    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="catalogClearAll()" title="Xoá toàn bộ danh mục">🗑 Xoá tất cả</button>
+      <button class="btn btn-ghost btn-sm" onclick="toggleCard('catCardBody',this)">▲ Ẩn</button>
+    </div>
+  </div>
+  <div class="card-body" id="catCardBody">
+    <div style="font-size:11px;color:var(--t2);margin-bottom:8px;font-weight:600">Mỗi lần bấm ⚡ So sánh giá, Hãng / Mã SP / Tên SP sẽ tự lưu vào đây — trùng Mã SP sẽ cập nhật theo bản ghi mới nhất. Nhóm hàng tự đoán theo tên, sai thì bấm ✏ để sửa tay.</div>
+    <div class="htabs" id="catTabs"></div>
+    <div class="ctrlbar">
+      <input class="sinp" id="catSearch" placeholder="🔍 Tên / mã SP / hãng..." oninput="renderCatalog()">
+      <span class="rcnt" id="catRcnt"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:480px">
+      <table>
+        <thead><tr>
+          <th style="min-width:70px">Hãng</th>
+          <th style="min-width:130px">Mã SP</th>
+          <th style="min-width:280px">Tên sản phẩm</th>
+          <th style="min-width:130px">Nhóm hàng</th>
+          <th style="min-width:80px">Thao tác</th>
+        </tr></thead>
+        <tbody id="catTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- STEP 1: NHÓM HÀNG -->
 <div class="card">
   <div class="card-head"><div class="sec-n">1</div><span class="sec-t">Chọn nhóm hàng</span><span class="sec-sub" style="margin-left:4px">— 7 ngành hàng</span></div>
   <div class="card-body">
     <div class="tgrid">
-      <div class="tcard on" data-id="53" onclick="selTpl(53,'Điện Gia Dụng','dt58',this)"><span class="ti">🏠</span><div class="tn">Điện Gia Dụng</div><div class="tc">Mẫu 58</div></div>
+      <div class="tcard on" data-id="58" onclick="selTpl(58,'Điện Thoại','dt58',this)"><span class="ti">📱</span><div class="tn">Điện Thoại</div><div class="tc">Mẫu 58</div></div>
+      <div class="tcard" data-id="57" onclick="selTpl(57,'Laptop','dt58',this)"><span class="ti">💻</span><div class="tn">Laptop</div><div class="tc">Mẫu 58</div></div>
+      <div class="tcard" data-id="53" onclick="selTpl(53,'Điện Gia Dụng','dt58',this)"><span class="ti">🏠</span><div class="tn">Điện Gia Dụng</div><div class="tc">Mẫu 58</div></div>
       <div class="tcard" data-id="96" onclick="selTpl(96,'Máy Lạnh','mau96',this)"><span class="ti">❄️</span><div class="tn">Máy Lạnh</div><div class="tc">Mẫu 96</div></div>
       <div class="tcard" data-id="97" onclick="selTpl(97,'Điện Tử – Điện Lạnh','mau97',this)"><span class="ti">📺</span><div class="tn">Điện Tử – Điện Lạnh</div><div class="tc">Mẫu 97</div></div>
       <div class="tcard" data-id="91" onclick="selTpl(91,'Máy Lọc Nước','dt58',this)"><span class="ti">💧</span><div class="tn">Máy Lọc Nước</div><div class="tc">Mẫu 58</div></div>
       <div class="tcard" data-id="81" onclick="selTpl(81,'Gia Dụng Lắp Đặt','maux81',this)"><span class="ti">🔧</span><div class="tn">Gia Dụng Lắp Đặt</div><div class="tc">Mẫu 81</div></div>
-      <div class="tcard" data-id="58" onclick="selTpl(58,'Điện Thoại','dt58',this)"><span class="ti">📱</span><div class="tn">Điện Thoại</div><div class="tc">Mẫu 58</div></div>
-      <div class="tcard" data-id="57" onclick="selTpl(57,'Laptop','dt58',this)"><span class="ti">💻</span><div class="tn">Laptop</div><div class="tc">Mẫu 58</div></div>
     </div>
   </div>
 </div>
@@ -590,7 +623,7 @@ function toggleCard(bodyId,btn){
 // ═══════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════
-let tplId=53,tplName='Điện Gia Dụng',tplFmt='dt58';
+let tplId=58,tplName='Điện Thoại',tplFmt='dt58';
 let rawN=null,rawM=null,allRows=[],activeF='all';
 let sortCol=null,sortDir=1;
 let promoRows=[];
@@ -891,7 +924,138 @@ function doCmp(){
   renderTbl();renderChart();
   $('results').style.display='block';
   setTimeout(()=>$('results').scrollIntoView({behavior:'smooth',block:'start'}),80);
-  toast(`✓ Phân tích xong — ${allRows.length} sản phẩm`);
+  const cRes=catalogUpsertFromRows(allRows,tplName);
+  renderCatalog();
+  const catMsg=cRes.added?` · đã lưu ${cRes.added} SP mới vào Danh mục`:'';
+  toast(`✓ Phân tích xong — ${allRows.length} sản phẩm${catMsg}`);
+}
+
+// ═══════════════════════════════════════════════════════
+//  DANH MỤC SẢN PHẨM (Hãng / Mã SP / Tên SP — tự lưu, dedup theo Mã SP)
+// ═══════════════════════════════════════════════════════
+const CAT_KEY='bgp_catalog_v1';
+const CAT_GROUPS=[
+  {k:'Điện Thoại',ic:'📱'},{k:'Laptop',ic:'💻'},{k:'Điện Gia Dụng',ic:'🏠'},
+  {k:'Tivi',ic:'📺'},{k:'Tủ Lạnh',ic:'🧊'},{k:'Máy Lạnh',ic:'❄️'},
+  {k:'Máy Giặt',ic:'🌀'},{k:'Máy Lọc Nước',ic:'💧'},{k:'Gia Dụng Lắp Đặt',ic:'🔧'},{k:'Khác',ic:'📦'}
+];
+let catActiveGroup='';
+function normVN(s){return String(s||'').toLowerCase().replace(/đ/g,'d').normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+function catalogLoad(){try{return JSON.parse(localStorage.getItem(CAT_KEY)||'{}');}catch(e){return{};}}
+function catalogSaveAll(obj){try{localStorage.setItem(CAT_KEY,JSON.stringify(obj));}catch(e){console.error('Lỗi lưu danh mục',e);}}
+function detectGroup(name,tplHint){
+  const n=normVN(name);
+  if(/\b(dien thoai|smartphone|iphone|samsung galaxy|oppo reno|oppo a|xiaomi|redmi|realme|\bvivo\b|nokia|oneplus|rog phone)\b/.test(n))return 'Điện Thoại';
+  if(/\b(laptop|macbook|notebook|ultrabook)\b/.test(n))return 'Laptop';
+  if(/\b(smart tivi|android tivi|google tivi|internet tivi|qled tv|oled tv|tivi|\btv\b)\b/.test(n))return 'Tivi';
+  if(/\btu lanh\b/.test(n))return 'Tủ Lạnh';
+  if(/\b(may lanh|dieu hoa)\b/.test(n))return 'Máy Lạnh';
+  if(/\bmay giat\b/.test(n))return 'Máy Giặt';
+  if(/\bmay loc nuoc\b/.test(n))return 'Máy Lọc Nước';
+  if(/\b(noi com|may quat|\bquat\b|bep tu|bep gas|bep hong ngoai|lo vi song|lo nuong|may xay|binh dun sieu toc|may say toc|ban ui|noi chien khong dau|may hut bui|robot hut bui|may ep trai cay|loa|tai nghe|may hut am|may rua chen|binh nong lanh|may nuoc nong)\b/.test(n))return 'Điện Gia Dụng';
+  const hint=String(tplHint||'');
+  if(CAT_GROUPS.some(g=>g.k===hint))return hint;
+  if(hint==='Điện Tử – Điện Lạnh')return 'Khác';
+  return 'Khác';
+}
+function catalogUpsertFromRows(rows,tplHint){
+  if(!rows||!rows.length)return{added:0,updated:0};
+  const cat=catalogLoad();
+  let added=0,updated=0;const now=Date.now();
+  rows.forEach(r=>{
+    if(!r.ma||!r.name)return;
+    const exists=cat[r.ma];
+    const group=exists&&exists.groupManual?exists.group:detectGroup(r.name,tplHint);
+    if(exists){
+      if(exists.name!==r.name||exists.brand!==r.brand)updated++;
+      cat[r.ma]={...exists,ma:r.ma,brand:r.brand||exists.brand||'',name:r.name,group,updatedAt:now};
+    }else{
+      cat[r.ma]={ma:r.ma,brand:r.brand||'',name:r.name,group,groupManual:false,updatedAt:now};
+      added++;
+    }
+  });
+  catalogSaveAll(cat);
+  return{added,updated};
+}
+function renderCatalogTabs(){
+  const cat=catalogLoad();
+  const list=Object.values(cat);
+  const counts={};CAT_GROUPS.forEach(g=>counts[g.k]=0);
+  list.forEach(p=>{counts[p.group]=(counts[p.group]||0)+1;});
+  const tabsEl=$('catTabs');if(!tabsEl)return;
+  const allTab=`<div class="htab ${catActiveGroup===''?'on':''}" onclick="catSelGroup('')">Tất cả<span class="hcnt">${list.length}</span></div>`;
+  const rest=CAT_GROUPS.filter(g=>counts[g.k]>0||g.k===catActiveGroup).map(g=>
+    `<div class="htab ${catActiveGroup===g.k?'on':''}" onclick="catSelGroup('${g.k}')">${g.ic} ${g.k}<span class="hcnt">${counts[g.k]||0}</span></div>`
+  ).join('');
+  tabsEl.innerHTML=allTab+rest;
+  const badge=$('catBadge');if(badge)badge.textContent=list.length?`${list.length} sản phẩm`:'';
+}
+function catSelGroup(k){catActiveGroup=k;renderCatalog();}
+function renderCatalog(){
+  renderCatalogTabs();
+  const cat=catalogLoad();
+  let list=Object.values(cat);
+  if(catActiveGroup)list=list.filter(p=>p.group===catActiveGroup);
+  const q=($('catSearch')?.value||'').toLowerCase().trim();
+  if(q)list=list.filter(p=>p.name.toLowerCase().includes(q)||p.ma.includes(q)||(p.brand||'').toLowerCase().includes(q));
+  list.sort((a,b)=>(a.brand||'').localeCompare(b.brand||'','vi')||a.name.localeCompare(b.name,'vi'));
+  const rc=$('catRcnt');if(rc)rc.textContent=`${list.length} sản phẩm`;
+  const body=$('catTbody');if(!body)return;
+  if(!list.length){body.innerHTML=`<tr><td colspan="5" style="text-align:center;color:var(--t2);padding:20px">Chưa có sản phẩm nào${catActiveGroup?' trong nhóm này':''}. So sánh giá 1 lần để tự động lưu.</td></tr>`;return;}
+  const escC=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const optsHtml=CAT_GROUPS.map(g=>`<option value="${g.k}">${g.ic} ${g.k}</option>`).join('');
+  body.innerHTML=list.map(p=>`
+    <tr data-ma="${escC(p.ma)}">
+      <td>${escC(p.brand)||'—'}</td>
+      <td style="font-family:var(--mono);font-size:11px">${escC(p.ma)}</td>
+      <td>${escC(p.name)}</td>
+      <td>${CAT_GROUPS.find(g=>g.k===p.group)?.ic||'📦'} ${escC(p.group)}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="catEditRow('${escC(p.ma).replace(/'/g,"\\'")}')" title="Sửa">✏</button>
+        <button class="btn btn-ghost btn-sm" onclick="catDeleteRow('${escC(p.ma).replace(/'/g,"\\'")}')" title="Xoá">🗑</button>
+      </td>
+    </tr>`).join('');
+  window._catGroupOptsHtml=optsHtml;
+}
+function catEditRow(ma){
+  const cat=catalogLoad();const p=cat[ma];if(!p)return;
+  const tr=document.querySelector(`#catTbody tr[data-ma="${CSS.escape(ma)}"]`);if(!tr)return;
+  const optsHtml=CAT_GROUPS.map(g=>`<option value="${g.k}" ${g.k===p.group?'selected':''}>${g.ic} ${g.k}</option>`).join('');
+  tr.innerHTML=`
+    <td><input class="uinp" id="catEdBrand" value="${String(p.brand||'').replace(/"/g,'&quot;')}" style="padding:5px 7px;font-size:12px"></td>
+    <td style="font-family:var(--mono);font-size:11px">${p.ma}</td>
+    <td><input class="uinp" id="catEdName" value="${String(p.name||'').replace(/"/g,'&quot;')}" style="padding:5px 7px;font-size:12px"></td>
+    <td><select class="msel" id="catEdGroup">${optsHtml}</select></td>
+    <td>
+      <button class="btn btn-gn btn-sm" onclick="catSaveEdit('${ma.replace(/'/g,"\\'")}')" title="Lưu">✓</button>
+      <button class="btn btn-ghost btn-sm" onclick="renderCatalog()" title="Huỷ">✕</button>
+    </td>`;
+  $('catEdName')?.focus();
+}
+function catSaveEdit(ma){
+  const cat=catalogLoad();const p=cat[ma];if(!p)return;
+  const brand=($('catEdBrand')?.value||'').trim();
+  const name=($('catEdName')?.value||'').trim();
+  const group=$('catEdGroup')?.value||p.group;
+  if(!name){toast('Tên sản phẩm không được để trống',false);return;}
+  cat[ma]={...p,brand,name,group,groupManual:true,updatedAt:Date.now()};
+  catalogSaveAll(cat);
+  toast('✓ Đã cập nhật sản phẩm');
+  renderCatalog();
+}
+function catDeleteRow(ma){
+  if(!confirm('Xoá sản phẩm này khỏi Danh mục?'))return;
+  const cat=catalogLoad();delete cat[ma];catalogSaveAll(cat);
+  renderCatalog();
+}
+function catalogClearAll(){
+  const cat=catalogLoad();
+  const n=Object.keys(cat).length;
+  if(!n){toast('Danh mục đang trống',false);return;}
+  if(!confirm(`Xoá toàn bộ ${n} sản phẩm trong Danh mục? Không thể hoàn tác.`))return;
+  localStorage.removeItem(CAT_KEY);
+  renderCatalog();
+  toast('✓ Đã xoá toàn bộ danh mục');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2565,13 +2729,21 @@ function promoExtractCashablePMH(km){
   const allowed=s=>/(hoặc|hoac|quy\s*đổi|qui\s*đổi|quy\s*doi|qui\s*doi|gi[aả]m\s*ti[eề]n|giam\s*tien|gi[aả]m\s*trực\s*tiếp|giam\s*truc\s*tiep|trừ\s*ti[eề]n|tru\s*tien|cấn\s*trừ|can\s*tru|ti[eề]n\s*mặt|tien\s*mat)/i.test(s);
   const hasChoice=s=>/(hoặc|hoac)/i.test(s);
   const money='(\\d+(?:[\\.,]\\d+)*|\\d+(?:[\\.,]\\d+)?)\\s*(tr|triệu|trieu|k|nghìn|nghin)?';
+  const DIRECT_RE='(?:gi[aả]m|giam|trừ|tru|quy\\s*đổi|qui\\s*đổi|quy\\s*doi|qui\\s*doi|cấn\\s*trừ|can\\s*tru|ti[eề]n\\s*mặt|tien\\s*mat)[^0-9]{0,35}'+money;
+  const FACE_RE='(?:trị\\s*gi[aá]|tri\\s*gia|mệnh\\s*gi[aá]|menh\\s*gia|pmh|voucher)[^0-9]{0,35}'+money;
   for(const p of parts){
     if(!hasPMH(p)||forbidden(p)||!allowed(p))continue;
     let directVal=0, faceVal=0;
-    const direct=new RegExp('(?:gi[aả]m|giam|trừ|tru|quy\\s*đổi|qui\\s*đổi|quy\\s*doi|qui\\s*doi|cấn\\s*trừ|can\\s*tru|ti[eề]n\\s*mặt|tien\\s*mat)[^0-9]{0,35}'+money,'i').exec(p);
-    if(direct) directVal=promoMoneyToNumber(direct[1],direct[2]);
-    const face=new RegExp('(?:trị\\s*gi[aá]|tri\\s*gia|mệnh\\s*gi[aá]|menh\\s*gia|pmh|voucher)[^0-9]{0,35}'+money,'i').exec(p);
-    if(face) faceVal=promoMoneyToNumber(face[1],face[2]);
+    const hoacIdx=p.search(/hoặc|hoac/i);
+    if(hoacIdx>=0){
+      // Tách theo "hoặc": vế trước là PMH/quà, vế sau là mức giảm tiền thay thế.
+      // Tránh chữ "trừ" trong ngoặc loại trừ thương hiệu (VD "(trừ Apple, Beats)") bị hiểu nhầm là từ khoá giảm tiền.
+      const beforeHoac=p.slice(0,hoacIdx), afterHoac=p.slice(hoacIdx);
+      const faceM=new RegExp(FACE_RE,'i').exec(beforeHoac); if(faceM)faceVal=promoMoneyToNumber(faceM[1],faceM[2]);
+      const directM=new RegExp(DIRECT_RE,'i').exec(afterHoac); if(directM)directVal=promoMoneyToNumber(directM[1],directM[2]);
+    }
+    if(!directVal){const direct=new RegExp(DIRECT_RE,'i').exec(p); if(direct)directVal=promoMoneyToNumber(direct[1],direct[2]);}
+    if(!faceVal){const face=new RegExp(FACE_RE,'i').exec(p); if(face)faceVal=promoMoneyToNumber(face[1],face[2]);}
     // "Giảm X hoặc tặng PMH trị giá Y": đây là 2 lựa chọn thay thế nhau, khách chỉ được 1.
     // Lấy giá trị THẤP HƠN thay vì mặc định lấy mệnh giá PMH.
     let val;
@@ -2744,8 +2916,23 @@ function promoFinalInfo(r){
       if(!p)continue;
       // PMH/Voucher: chỉ trừ khi có quy đổi / trừ tiền / giảm tiền / hoặc giảm ngay. Không trừ PMH chỉ tặng.
       if(/(pmh|phieu mua hang|voucher|coupon|ma giam)/.test(p) && !/(khong duoc|khong quy doi|khong qui doi|khong giam tien|chi tang)/.test(p) && /(quy doi|qui doi|giam tien|tru tien|can tru|tien mat|hoac|giam ngay|giam truc tiep)/.test(p)){
-        let vDirect=firstMoneyAfter(original,'(?:giam ngay|giảm ngay|giam|giảm|tru|trừ|quy\\s*doi|quy\\s*đổi|qui\\s*doi|qui\\s*đổi|can\\s*tru|cấn\\s*trừ|tien\\s*mat|tiền\\s*mặt)',70);
-        let vFace=firstMoneyAfter(original,'(?:tri\\s*gia|trị\\s*giá|menh\\s*gia|mệnh\\s*giá|pmh|voucher)',70);
+        const DIRECT_KW='(?:giam ngay|giảm ngay|giam|giảm|tru|trừ|quy\\s*doi|quy\\s*đổi|qui\\s*doi|qui\\s*đổi|can\\s*tru|cấn\\s*trừ|tien\\s*mat|tiền\\s*mặt)';
+        const FACE_KW='(?:tri\\s*gia|trị\\s*giá|menh\\s*gia|mệnh\\s*giá|pmh|voucher)';
+        let vDirect=0,vFace=0;
+        const hoacM=/hoặc|hoac/i.exec(original);
+        if(hoacM){
+          // Tách theo "hoặc": vế trước là PMH/quà, vế sau là mức giảm tiền thay thế.
+          // Tránh việc chữ "trừ" trong ngoặc loại trừ thương hiệu (VD "(trừ Apple, Beats)") bị nhận nhầm là từ khoá giảm tiền.
+          const beforeHoac=original.slice(0,hoacM.index);
+          const afterHoac=original.slice(hoacM.index+hoacM[0].length);
+          vFace=firstMoneyAfter(beforeHoac,FACE_KW,70);
+          vDirect=firstMoneyAfter(afterHoac,DIRECT_KW,70);
+          if(!vFace)vFace=firstMoneyAfter(original,FACE_KW,70);
+          if(!vDirect)vDirect=firstMoneyAfter(original,DIRECT_KW,70);
+        }else{
+          vDirect=firstMoneyAfter(original,DIRECT_KW,70);
+          vFace=firstMoneyAfter(original,FACE_KW,70);
+        }
         // "Giảm X hoặc tặng PMH trị giá Y": 2 lựa chọn thay thế nhau, khách chỉ được 1 -> lấy giá trị thấp hơn.
         let v, label='PMH/Voucher';
         if(vDirect>0 && vFace>0 && vDirect!==vFace && /hoac/.test(p)){
@@ -3069,6 +3256,7 @@ function promoFinalInfo(r){
   setupKeys();
   setupAutoDate();
   renderHist();
+  renderCatalog();
 })();
 </script>
 </body>
