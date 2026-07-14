@@ -313,6 +313,37 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
 </style>
 </head>
 <body>
+<div id="pwGate" style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#0d1117;font-family:'Inter',sans-serif;">
+  <div style="width:min(320px,90vw);background:#161b22;border:1px solid #2d3748;border-radius:14px;padding:28px 24px;box-shadow:0 4px 24px rgba(0,0,0,.45);text-align:center;">
+    <div style="font-size:15px;font-weight:600;color:#f9fafb;margin-bottom:14px;">Nhập mật khẩu để tiếp tục</div>
+    <input id="pwInput" type="password" autocomplete="off" placeholder="Mật khẩu" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;border:1px solid #374151;background:#1e242f;color:#f9fafb;font-size:14px;outline:none;margin-bottom:10px;">
+    <div id="pwErr" style="color:#ef4444;font-size:12px;min-height:16px;margin-bottom:8px;"></div>
+    <button id="pwBtn" style="width:100%;padding:10px 12px;border:none;border-radius:8px;background:#4f8ef7;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Xác nhận</button>
+  </div>
+</div>
+<script>
+(function(){
+  var PASS='2026';
+  var gate=document.getElementById('pwGate');
+  var input=document.getElementById('pwInput');
+  var btn=document.getElementById('pwBtn');
+  var err=document.getElementById('pwErr');
+  if(sessionStorage.getItem('pwOk')==='1'){gate.style.display='none';}
+  function tryPass(){
+    if(input.value===PASS){
+      try{sessionStorage.setItem('pwOk','1');}catch(e){}
+      gate.style.display='none';
+    }else{
+      err.textContent='Sai mật khẩu, vui lòng thử lại.';
+      input.value='';
+      input.focus();
+    }
+  }
+  btn.addEventListener('click',tryPass);
+  input.addEventListener('keydown',function(e){if(e.key==='Enter')tryPass();});
+  setTimeout(function(){input.focus();},50);
+})();
+</script>
 <div id="app" data-t="dark">
 
 <!-- ════ TOPBAR ════ -->
