@@ -2503,25 +2503,44 @@ function promoMoneyToNumber(raw,unit){
   }
   return parseInt(s.replace(/\D/g,''),10)||0;
 }
+// Gộp dòng bắt đầu bằng "hoặc/hoac" vào dòng ngay trước đó, để không tách rời 2 phương án
+// thay thế nhau (VD dòng 1: "Giảm 5.000.000đ", dòng 2: "Hoặc tặng PMH trị giá 6.200.000đ").
+function mergeHoacChunks(chunks){
+  const out=[];
+  for(const raw of chunks){
+    const stripped=String(raw||'').replace(/^[\-\*\u2022\d\.\)\s]+/,'').trim();
+    if(out.length && /^(hoặc|hoac)\b/i.test(stripped)){
+      out[out.length-1]=out[out.length-1]+' '+raw;
+    }else{
+      out.push(raw);
+    }
+  }
+  return out;
+}
 function promoExtractCashablePMH(km){
   const text=String(km||'').toLowerCase();
   if(!text)return 0;
-  const chunks=text.split(/[\n;•|]+/).map(s=>s.trim()).filter(Boolean);
+  const rawChunks=text.split(/[\n;•|]+/).map(s=>s.trim()).filter(Boolean);
+  const chunks=mergeHoacChunks(rawChunks);
   const parts=chunks.length?chunks:[text];
   let total=0;
   const hasPMH=s=>/(pmh|phi[eê]u mua h[aà]ng|phieu mua hang|voucher|coupon|m[aã] gi[aả]m|ma giam)/i.test(s);
   const forbidden=s=>/(kh[oô]ng\s+(được\s+)?(quy|qui)\s*đổi|khong\s+(duoc\s+)?(quy|qui)\s*doi|kh[oô]ng\s+(được\s+)?gi[aả]m\s*ti[eề]n|khong\s+(duoc\s+)?giam\s*tien|kh[oô]ng\s+trừ|khong\s+tru|chỉ\s+tặng|chi\s+tang)/i.test(s);
   const allowed=s=>/(hoặc|hoac|quy\s*đổi|qui\s*đổi|quy\s*doi|qui\s*doi|gi[aả]m\s*ti[eề]n|giam\s*tien|gi[aả]m\s*trực\s*tiếp|giam\s*truc\s*tiep|trừ\s*ti[eề]n|tru\s*tien|cấn\s*trừ|can\s*tru|ti[eề]n\s*mặt|tien\s*mat)/i.test(s);
+  const hasChoice=s=>/(hoặc|hoac)/i.test(s);
   const money='(\\d+(?:[\\.,]\\d+)*|\\d+(?:[\\.,]\\d+)?)\\s*(tr|triệu|trieu|k|nghìn|nghin)?';
   for(const p of parts){
     if(!hasPMH(p)||forbidden(p)||!allowed(p))continue;
-    let val=0;
+    let directVal=0, faceVal=0;
     const direct=new RegExp('(?:gi[aả]m|giam|trừ|tru|quy\\s*đổi|qui\\s*đổi|quy\\s*doi|qui\\s*doi|cấn\\s*trừ|can\\s*tru|ti[eề]n\\s*mặt|tien\\s*mat)[^0-9]{0,35}'+money,'i').exec(p);
-    if(direct) val=promoMoneyToNumber(direct[1],direct[2]);
-    if(!val){
-      const face=new RegExp('(?:trị\\s*gi[aá]|tri\\s*gia|mệnh\\s*gi[aá]|menh\\s*gia|pmh|voucher)[^0-9]{0,35}'+money,'i').exec(p);
-      if(face) val=promoMoneyToNumber(face[1],face[2]);
-    }
+    if(direct) directVal=promoMoneyToNumber(direct[1],direct[2]);
+    const face=new RegExp('(?:trị\\s*gi[aá]|tri\\s*gia|mệnh\\s*gi[aá]|menh\\s*gia|pmh|voucher)[^0-9]{0,35}'+money,'i').exec(p);
+    if(face) faceVal=promoMoneyToNumber(face[1],face[2]);
+    // "Giảm X hoặc tặng PMH trị giá Y": đây là 2 lựa chọn thay thế nhau, khách chỉ được 1.
+    // Lấy giá trị THẤP HƠN thay vì mặc định lấy mệnh giá PMH.
+    let val;
+    if(directVal>0 && faceVal>0 && directVal!==faceVal && hasChoice(p)) val=Math.min(directVal,faceVal);
+    else val=directVal>0?directVal:faceVal;
     if(val>0) total+=val;
   }
   return total;
@@ -2629,6 +2648,10 @@ function promoFinalInfo(r){
   .smart-final-wrap{grid-column:1/-1;background:linear-gradient(135deg,color-mix(in srgb,var(--ac) 10%,var(--bg2)),var(--bg1));border:1px solid color-mix(in srgb,var(--ac) 42%,var(--bd));border-radius:12px;padding:12px;margin-top:2px}
   .smart-final-title{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;color:var(--t0);margin-bottom:10px}.smart-final-title span{font-size:10px;color:var(--t2);font-weight:600}
   .smart-final-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}.smart-ck{display:flex;align-items:flex-start;gap:7px;background:var(--bg2);border:1px solid var(--bd);border-radius:9px;padding:8px 9px;min-height:48px;cursor:pointer}.smart-ck:hover{border-color:var(--ac)}.smart-ck input{width:15px;height:15px;accent-color:var(--ac);margin-top:1px}.smart-ck b{font-size:11px;color:var(--t0)}.smart-ck small{display:block;font-size:9px;color:var(--t2);line-height:1.25;margin-top:2px}.smart-mode{background:var(--bg3);border:1px solid var(--bd);border-radius:8px;color:var(--t0);font-size:11px;padding:7px 8px;outline:none}.smart-deduct{display:inline-flex;align-items:center;gap:4px;margin:2px 3px 2px 0;border-radius:999px;background:color-mix(in srgb,var(--gn) 15%,transparent);color:var(--gn);font-size:10px;font-weight:900;padding:2px 7px;white-space:nowrap}.smart-final-price{display:inline-flex;margin-top:3px;border-radius:999px;background:color-mix(in srgb,var(--am) 18%,transparent);color:var(--am);font-size:10px;font-weight:900;padding:2px 7px;white-space:nowrap}.smart-note{font-size:10px;color:var(--t2);line-height:1.35;margin-top:8px}
+  .smart-summary{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;font-weight:800;padding:6px 10px;border-radius:8px}
+  .smart-summary.on{background:color-mix(in srgb,var(--gn) 16%,transparent);color:var(--gn)}
+  .smart-summary.off{background:color-mix(in srgb,var(--rd) 14%,transparent);color:var(--t2)}
+  .smart-deduct-total{display:inline-flex;margin-left:6px;border-radius:999px;background:color-mix(in srgb,var(--rd) 14%,transparent);color:var(--rd);font-size:10px;font-weight:900;padding:2px 7px;white-space:nowrap}
   `;
   document.head.appendChild(css);
 
@@ -2668,7 +2691,7 @@ function promoFinalInfo(r){
     const re=new RegExp(before+'[^0-9]{0,'+maxGap+'}'+money,'i');
     const m=re.exec(text); return m?moneyToNumber(m[1],m[2]):0;
   }
-  function splitKM(km){return String(km||'').split(/[\n;•|]+/).map(s=>s.trim()).filter(Boolean);}
+  function splitKM(km){return mergeHoacChunks(String(km||'').split(/[\n;•|]+/).map(s=>s.trim()).filter(Boolean));}
   function add(res,key,label,amount,source,confidence='safe'){
     amount=Math.round(+amount||0); if(amount<=0)return;
     const old=res.find(x=>x.key===key && x.amount===amount && x.source===source);
@@ -2681,9 +2704,18 @@ function promoFinalInfo(r){
       if(!p)continue;
       // PMH/Voucher: chỉ trừ khi có quy đổi / trừ tiền / giảm tiền / hoặc giảm ngay. Không trừ PMH chỉ tặng.
       if(/(pmh|phieu mua hang|voucher|coupon|ma giam)/.test(p) && !/(khong duoc|khong quy doi|khong qui doi|khong giam tien|chi tang)/.test(p) && /(quy doi|qui doi|giam tien|tru tien|can tru|tien mat|hoac|giam ngay|giam truc tiep)/.test(p)){
-        let v=firstMoneyAfter(original,'(?:giam ngay|giảm ngay|giam|giảm|tru|trừ|quy\\s*doi|quy\\s*đổi|qui\\s*doi|qui\\s*đổi|can\\s*tru|cấn\\s*trừ|tien\\s*mat|tiền\\s*mặt)',70);
-        if(!v)v=firstMoneyAfter(original,'(?:tri\\s*gia|trị\\s*giá|menh\\s*gia|mệnh\\s*giá|pmh|voucher)',70);
-        add(res,'pmh','PMH/Voucher',v,original,'safe');
+        let vDirect=firstMoneyAfter(original,'(?:giam ngay|giảm ngay|giam|giảm|tru|trừ|quy\\s*doi|quy\\s*đổi|qui\\s*doi|qui\\s*đổi|can\\s*tru|cấn\\s*trừ|tien\\s*mat|tiền\\s*mặt)',70);
+        let vFace=firstMoneyAfter(original,'(?:tri\\s*gia|trị\\s*giá|menh\\s*gia|mệnh\\s*giá|pmh|voucher)',70);
+        // "Giảm X hoặc tặng PMH trị giá Y": 2 lựa chọn thay thế nhau, khách chỉ được 1 -> lấy giá trị thấp hơn.
+        let v, label='PMH/Voucher';
+        if(vDirect>0 && vFace>0 && vDirect!==vFace && /hoac/.test(p)){
+          v=Math.min(vDirect,vFace);
+          // Ghi rõ đây là lựa chọn tiền mặt/PMH (không lấy nhầm giá trị PMH cao hơn), để không hiểu lầm số hiển thị là mệnh giá PMH.
+          label = v===vDirect ? `Giảm tiền (không lấy PMH ${fmtMoney(vFace)})` : `PMH (không lấy giảm ${fmtMoney(vDirect)})`;
+        } else {
+          v=vDirect>0?vDirect:vFace;
+        }
+        add(res,'pmh',label,v,original,'safe');
       }
       // Microsoft 365 Personal hoặc giảm ngay xxx
       if(/microsoft\s*365|m365|office\s*365/.test(p) && /(hoac|hoặc|giam ngay|giảm ngay|giam tien|giảm tiền)/i.test(original)){
@@ -2768,7 +2800,8 @@ function promoFinalInfo(r){
         <label class="smart-ck"><input type="checkbox" id="v83Installment"><div><b>Trả góp</b><small>Ưu đãi giảm tiền khi trả góp.</small></div></label>
         <select class="smart-mode" id="v83FinalMode"><option value="safe">Giá cuối an toàn</option><option value="max">Giá cuối tối đa</option></select>
       </div>
-      <div class="smart-note">Ghi chú: các khuyến mãi dạng quà tặng/PMH không ghi được quy đổi tiền sẽ không bị trừ. Các dòng có chữ “hoặc” chỉ lấy phương án giảm tiền tốt nhất trong nhóm, tránh cộng sai.</div>`;
+      <div class="smart-note">Ghi chú: các khuyến mãi dạng quà tặng/PMH không ghi được quy đổi tiền sẽ không bị trừ. Các dòng có chữ “hoặc” chỉ lấy phương án giảm tiền tốt nhất trong nhóm, tránh cộng sai.</div>
+      <div class="smart-summary" id="v83SmartSummary"></div>`;
     panel.appendChild(box);
     box.querySelectorAll('input,select').forEach(x=>x.addEventListener('change',()=>{window.renderPromoTbl&&renderPromoTbl();window.renderPromoChart&&renderPromoChart();window.renderPromoStats&&renderPromoStats();window.renderSegments&&renderSegments();}));
   }
@@ -2802,10 +2835,20 @@ function promoFinalInfo(r){
     if(typeof oldRender==='function')oldRender();
     const rows=(typeof window.getPromoFiltered==='function'?window.getPromoFiltered():[]).slice(0,300);
     document.querySelectorAll('#promoCard thead th').forEach(th=>{const t=th.textContent.trim(); if(t==='Giá KM'||t==='Giá cuối')th.textContent='Giá cuối'; if(t==='Tiết kiệm'||t==='Tổng giảm')th.textContent='Tổng giảm';});
+    let appliedCount=0;
     [...document.querySelectorAll('#promoBody tr')].forEach((tr,i)=>{
       const r=rows[i]; if(!r)return;
       const priceCell=tr.children[5], saveCell=tr.children[6], pctCell=tr.children[7], kmCell=tr.children[9];
-      if(priceCell){priceCell.innerHTML=`<b>${fmtP(r.pricePromo)}</b>${r.finalApplied?`<br><span class="smart-final-price">Giá KM ${fmtP(r.basePricePromo)}đ → Giá cuối</span>`:''}`;}
+      if(priceCell){
+        let html=`<b>${fmtP(r.pricePromo)}</b>`;
+        if(r.finalApplied){
+          appliedCount++;
+          const chips=(r.smartItems||[]).map(x=>`<span class="smart-deduct">${esc(x.label)} -${fmtMoney(x.amount)}</span>`).join('');
+          html+=`<br><span class="smart-final-price">Giá KM ${fmtP(r.basePricePromo)}đ</span><span class="smart-deduct-total">Đã trừ -${fmtMoney(r.smartDeduct||0)}</span>`;
+          if(chips)html+=`<div style="margin-top:4px">${chips}</div>`;
+        }
+        priceCell.innerHTML=html;
+      }
       if(saveCell)saveCell.textContent='-'+fmtP(r.save);
       if(pctCell)pctCell.textContent=(Math.min(r.pctPromo||0,0.999)*100).toFixed(1)+'%';
       if(kmCell&&r.finalApplied){
@@ -2813,6 +2856,13 @@ function promoFinalInfo(r){
         if(!kmCell.innerHTML.includes('smart-deduct'))kmCell.innerHTML += `<div style="margin-top:5px">${chips}</div>`;
       }
     });
+    const sumEl=$id('v83SmartSummary');
+    if(sumEl){
+      const total=rows.length;
+      if(total===0){ sumEl.className='smart-summary off'; sumEl.textContent='Chưa có sản phẩm nào để tính giá.'; }
+      else if(appliedCount>0){ sumEl.className='smart-summary on'; sumEl.textContent=`✓ Đã áp dụng giảm giá thông minh cho ${appliedCount}/${total} sản phẩm đang hiển thị`; }
+      else { sumEl.className='smart-summary off'; sumEl.textContent=`Không có sản phẩm nào khớp ưu đãi đã tick, trong ${total} sản phẩm đang hiển thị (giá vẫn giữ nguyên Giá KM)`; }
+    }
   };
   window.copyPromoForStaff=function(){
     const rows=(typeof getPromoFiltered==='function'?getPromoFiltered():[]).slice(0,+($id('v8TopLimit')?.value||30));
