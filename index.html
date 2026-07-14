@@ -2652,6 +2652,10 @@ function promoFinalInfo(r){
   .smart-summary.on{background:color-mix(in srgb,var(--gn) 16%,transparent);color:var(--gn)}
   .smart-summary.off{background:color-mix(in srgb,var(--rd) 14%,transparent);color:var(--t2)}
   .smart-deduct-total{display:inline-flex;margin-left:6px;border-radius:999px;background:color-mix(in srgb,var(--rd) 14%,transparent);color:var(--rd);font-size:10px;font-weight:900;padding:2px 7px;white-space:nowrap}
+  .smart-filter-btn{display:flex;align-items:center;gap:8px;margin-top:9px;background:var(--bg2);border:1px dashed var(--bd2);border-radius:9px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:800;color:var(--t1)}
+  .smart-filter-btn:hover{border-color:var(--ac)}
+  .smart-filter-btn input{width:15px;height:15px;accent-color:var(--ac)}
+  .smart-filter-btn.active{background:color-mix(in srgb,var(--ac) 14%,var(--bg2));border-style:solid;border-color:var(--ac);color:var(--ac)}
   `;
   document.head.appendChild(css);
 
@@ -2801,6 +2805,7 @@ function promoFinalInfo(r){
         <select class="smart-mode" id="v83FinalMode"><option value="safe">Giá cuối an toàn</option><option value="max">Giá cuối tối đa</option></select>
       </div>
       <div class="smart-note">Ghi chú: các khuyến mãi dạng quà tặng/PMH không ghi được quy đổi tiền sẽ không bị trừ. Các dòng có chữ “hoặc” chỉ lấy phương án giảm tiền tốt nhất trong nhóm, tránh cộng sai.</div>
+      <label class="smart-filter-btn" id="v83OnlyMatchedWrap"><input type="checkbox" id="v83OnlyMatched"><span>🔎 Chỉ hiện sản phẩm có ưu đãi đã tick ở trên</span></label>
       <div class="smart-summary" id="v83SmartSummary"></div>`;
     panel.appendChild(box);
     box.querySelectorAll('input,select').forEach(x=>x.addEventListener('change',()=>{window.renderPromoTbl&&renderPromoTbl();window.renderPromoChart&&renderPromoChart();window.renderPromoStats&&renderPromoStats();window.renderSegments&&renderSegments();}));
@@ -2826,6 +2831,7 @@ function promoFinalInfo(r){
     rows=rows.filter(r=>(r.pctPromo||0)>=minPct && (r.save||0)>=minSave);
     const pr=$id('v8PriceRange')?.value||''; if(pr){const [lo,hi]=pr.split('-').map(Number);rows=rows.filter(r=>(r.gg||0)>=lo&&(r.gg||0)<hi);}
     const kind=$id('v8PromoType')?.value||''; if(kind)rows=rows.filter(r=>hasKMType(r,kind));
+    if(opt('v83OnlyMatched'))rows=rows.filter(r=>r.finalApplied);
     const sort=$id('promoSort')?.value||'pct';
     rows.sort((a,b)=>{if(sort==='amount')return (b.save-a.save)||(b.pctPromo-a.pctPromo)||(b.dealScore-a.dealScore); if(sort==='price')return (a.pricePromo-b.pricePromo)||(b.dealScore-a.dealScore); return (b.dealScore-a.dealScore)||(b.pctPromo-a.pctPromo)||(b.save-a.save);});
     return rows;
@@ -2862,6 +2868,15 @@ function promoFinalInfo(r){
       if(total===0){ sumEl.className='smart-summary off'; sumEl.textContent='Chưa có sản phẩm nào để tính giá.'; }
       else if(appliedCount>0){ sumEl.className='smart-summary on'; sumEl.textContent=`✓ Đã áp dụng giảm giá thông minh cho ${appliedCount}/${total} sản phẩm đang hiển thị`; }
       else { sumEl.className='smart-summary off'; sumEl.textContent=`Không có sản phẩm nào khớp ưu đãi đã tick, trong ${total} sản phẩm đang hiển thị (giá vẫn giữ nguyên Giá KM)`; }
+    }
+    const filterWrap=$id('v83OnlyMatchedWrap');
+    if(filterWrap){
+      const labels={v83PMH:'PMH/Voucher',v83MS:'Office (MS365)',v83HSSV:'HS-SV',v83Trade:'Thu cũ đổi mới',v83Payment:'Thanh toán',v83Installment:'Trả góp'};
+      const picked=Object.keys(labels).filter(id=>opt(id)).map(id=>labels[id]);
+      const span=filterWrap.querySelector('span');
+      const on=opt('v83OnlyMatched');
+      filterWrap.classList.toggle('active',on);
+      if(span)span.textContent=picked.length?`🔎 Chỉ hiện sản phẩm có: ${picked.join(', ')}`:`🔎 Chỉ hiện sản phẩm có ưu đãi đã tick ở trên (chưa tick loại nào)`;
     }
   };
   window.copyPromoForStaff=function(){
