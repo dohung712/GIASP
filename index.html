@@ -2060,10 +2060,19 @@ function setupAutoDate(){
   .v8-field label{display:block;font-size:10px;color:var(--t2);font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
   .v8-field select,.v8-field input{width:100%;background:var(--bg1);border:1px solid var(--bd);border-radius:8px;color:var(--t0);padding:7px 9px;font-size:12px;outline:none;font-family:var(--font)}
   .v8-field select:focus,.v8-field input:focus{border-color:var(--ac);box-shadow:0 0 0 3px var(--acs)}
-  .brand-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;max-height:92px;overflow:auto;padding:2px}
+  .brand-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;max-height:120px;overflow:auto;padding:2px}
   .brand-pill{border:1px solid var(--bd);background:var(--bg1);color:var(--t2);border-radius:999px;padding:5px 10px;font-size:11px;cursor:pointer;user-select:none;transition:.15s;font-weight:600}
   .brand-pill:hover{border-color:var(--ac);color:var(--t0)}
   .brand-pill.on{background:var(--ac);border-color:var(--ac);color:#fff;box-shadow:0 2px 10px color-mix(in srgb,var(--ac) 25%,transparent)}
+  .brand-check-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:2px}
+  .brand-check-head .v8-mini-label{font-size:10px;color:var(--t2);font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+  .brand-check-head .v8-mini-btns{display:flex;gap:6px}
+  .brand-check-head .v8-mini-btns button{border:1px solid var(--bd);background:var(--bg1);color:var(--t2);border-radius:7px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer}
+  .brand-check-head .v8-mini-btns button:hover{border-color:var(--ac);color:var(--t0)}
+  .brand-check{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--bd);background:var(--bg1);color:var(--t1);border-radius:8px;padding:5px 9px;font-size:11px;font-weight:600;cursor:pointer;user-select:none;transition:.15s}
+  .brand-check:hover{border-color:var(--ac)}
+  .brand-check.on{background:color-mix(in srgb,var(--ac) 14%,var(--bg1));border-color:var(--ac);color:var(--t0)}
+  .brand-check input{width:14px;height:14px;accent-color:var(--ac);pointer-events:none}
   .deal-badge{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:3px 9px;font-size:10px;font-weight:800;white-space:nowrap}
   .deal-best{background:#fef3c7;color:#92400e}.deal-hot{background:#fee2e2;color:#991b1b}.deal-top{background:#dcfce7;color:#065f46}.deal-good{background:#e0f2fe;color:#075985}
   .score-box{display:inline-flex;min-width:38px;justify-content:center;border-radius:7px;padding:3px 6px;background:var(--acs);color:var(--acl,var(--ac));font-weight:800;font-family:var(--mono)}
@@ -2093,10 +2102,18 @@ function setupAutoDate(){
         <div class="v8-field"><label>Loại ưu đãi</label><select id="v8PromoType" onchange="renderPromoTbl();renderPromoChart()"><option value="">Tất cả</option><option value="gift">Có quà/voucher</option><option value="installment">Có trả góp/trả chậm</option><option value="voucher">Có voucher/cashback</option></select></div>
         <div class="v8-field"><label>Số dòng xuất</label><select id="v8TopLimit"><option value="20">Top 20</option><option value="30" selected>Top 30</option><option value="50">Top 50</option><option value="100">Top 100</option><option value="9999">Tất cả</option></select></div>
       </div>
+      <div class="brand-check-head">
+        <span class="v8-mini-label">Hãng xuất (bỏ tick để loại khỏi kết quả)</span>
+        <span class="v8-mini-btns">
+          <button type="button" onclick="v8SelectAllBrands()">✓ Chọn tất cả</button>
+          <button type="button" onclick="v8ClearAllBrands()">✕ Bỏ chọn tất cả</button>
+        </span>
+      </div>
       <div class="brand-pills" id="v8BrandPills"></div>
       <div class="v8-actions">
         <button class="btn btn-gn btn-sm" onclick="copyPromoForStaff()">📋 Copy gửi NV</button>
         <button class="btn btn-ac btn-sm" onclick="exportPromoXlsx()">📊 Xuất Excel đẹp</button>
+        <button class="btn btn-ac btn-sm" onclick="exportPromoImage()" title="Mỗi hãng đã tick sẽ xuất riêng 1 ảnh PNG">🖼 Xuất Ảnh (mỗi hãng 1 ảnh)</button>
         <button class="btn btn-gn btn-sm" onclick="v8QuickBest()">🔥 Chỉ BEST/HOT</button>
         <button class="btn btn-ghost btn-sm" onclick="v8ResetPromoFilters()">↺ Reset lọc</button>
         <span class="sec-sub">File xuất có Dashboard + Top Deal + Theo hãng + Full Data, cắt gửi là xong.</span>
@@ -2104,31 +2121,47 @@ function setupAutoDate(){
     body.insertBefore(panel,el('promoSum')?.nextSibling||body.firstChild);
   }
 
-  window.v8SelectBrand=function(b){
-    window._v8SelectedBrands.clear();
-    if(b) window._v8SelectedBrands.add(b);
-    document.querySelectorAll('.brand-pill').forEach(x=>x.classList.toggle('on',!b?x.dataset.brand==='':x.dataset.brand===b));
-    const old=el('promoBrand'); if(old) old.value=b||'';
-    renderPromoTbl();renderPromoChart();
-  }
-  window.v8ToggleBrand=function(b){
-    if(!b){window._v8SelectedBrands.clear();}
-    else{
-      if(window._v8SelectedBrands.has(b))window._v8SelectedBrands.delete(b);else window._v8SelectedBrands.add(b);
-    }
-    document.querySelectorAll('.brand-pill').forEach(x=>x.classList.toggle('on',x.dataset.brand===''?!window._v8SelectedBrands.size:window._v8SelectedBrands.has(x.dataset.brand)));
+  function refreshBrandCheckUI(){
+    document.querySelectorAll('.brand-check').forEach(x=>{
+      const on=window._v8SelectedBrands.has(x.dataset.brand);
+      x.classList.toggle('on',on);
+      const cb=x.querySelector('input[type=checkbox]'); if(cb)cb.checked=on;
+    });
     const sel=el('v8BrandSelect'); if(sel)sel.value=window._v8SelectedBrands.size===1?[...window._v8SelectedBrands][0]:'';
     const old=el('promoBrand'); if(old)old.value=window._v8SelectedBrands.size===1?[...window._v8SelectedBrands][0]:'';
+  }
+  // Dropdown "Hãng" (single-pick quick filter): chọn 1 hãng = chỉ tick hãng đó, chọn lại "Tất cả hãng" = tick lại toàn bộ.
+  window.v8SelectBrand=function(b){
+    if(b){window._v8SelectedBrands=new Set([b]);}
+    else{window._v8SelectedBrands=new Set(window._v8Brands);}
+    refreshBrandCheckUI();
+    renderPromoTbl();renderPromoChart();
+  }
+  // Checkbox từng hãng: bỏ tick = loại hãng đó khỏi kết quả/Xuất Excel/Xuất Ảnh.
+  window.v8ToggleBrand=function(b){
+    if(window._v8SelectedBrands.has(b))window._v8SelectedBrands.delete(b);else window._v8SelectedBrands.add(b);
+    refreshBrandCheckUI();
+    renderPromoTbl();renderPromoChart();
+  }
+  window.v8SelectAllBrands=function(){
+    window._v8SelectedBrands=new Set(window._v8Brands);
+    refreshBrandCheckUI();
+    renderPromoTbl();renderPromoChart();
+  }
+  window.v8ClearAllBrands=function(){
+    window._v8SelectedBrands.clear();
+    refreshBrandCheckUI();
     renderPromoTbl();renderPromoChart();
   }
   window.v8ResetPromoFilters=function(){
-    window._v8SelectedBrands.clear();
+    window._v8SelectedBrands=new Set(window._v8Brands);
     if(el('v8BrandSelect'))el('v8BrandSelect').value='';
     if(el('v8MinPct'))el('v8MinPct').value='0.10';
     if(el('v8MinSave'))el('v8MinSave').value='500000';
     if(el('v8PriceRange'))el('v8PriceRange').value='';
     if(el('v8PromoType'))el('v8PromoType').value='';
     if(el('promoSearch'))el('promoSearch').value='';
+    refreshBrandCheckUI();
     renderPromoTbl();renderPromoChart();
   }
   window.v8QuickBest=function(){
@@ -2141,11 +2174,14 @@ function setupAutoDate(){
   window.doPromo=function(){
     oldDoPromo();
     installPromoPanel();
+    const brandsChanged=JSON.stringify(window._v8Brands||[])!==JSON.stringify([...new Set(promoRows.map(r=>r.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi')));
     window._v8Brands=[...new Set(promoRows.map(r=>r.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi'));
     const opts='<option value="">Tất cả hãng</option>'+window._v8Brands.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');
     if(el('v8BrandSelect'))el('v8BrandSelect').innerHTML=opts;
-    const pills=['',...window._v8Brands].map(b=>`<button type="button" class="brand-pill ${b===''?'on':''}" data-brand="${esc(b)}" onclick="v8ToggleBrand('${String(b).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${b||'Tất cả'}</button>`).join('');
-    if(el('v8BrandPills'))el('v8BrandPills').innerHTML=pills;
+    // Tick sẵn tất cả hãng mỗi khi danh sách hãng thay đổi (dữ liệu mới nạp). Bỏ tick 1 hãng = loại hãng đó ra khỏi bảng/Excel/Ảnh xuất.
+    if(brandsChanged || !window._v8SelectedBrands || !window._v8SelectedBrands.size) window._v8SelectedBrands=new Set(window._v8Brands);
+    const checks=window._v8Brands.map(b=>`<label type="button" class="brand-check ${window._v8SelectedBrands.has(b)?'on':''}" data-brand="${esc(b)}" onclick="event.preventDefault();v8ToggleBrand('${String(b).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><input type="checkbox" ${window._v8SelectedBrands.has(b)?'checked':''}>${esc(b)}</label>`).join('');
+    if(el('v8BrandPills'))el('v8BrandPills').innerHTML=checks||'<span class="sec-sub">Chưa có dữ liệu hãng</span>';
     renderPromoTbl();renderPromoChart();
   }
 
@@ -2823,8 +2859,8 @@ function promoFinalInfo(r){
     let base=[]; try{base=[...(window.promoRows||promoRows||[])];}catch(e){base=[];}
     let rows=base.map(applySmart);
     const selected=window._v8SelectedBrands||new Set();
-    const oldBrand=$id('promoBrand')?.value||'';
-    if(selected.size)rows=rows.filter(r=>selected.has(r.brand)); else if(oldBrand)rows=rows.filter(r=>r.brand===oldBrand);
+    // Checkbox hãng: mặc định tick hết. Bỏ tick hãng nào -> loại hãng đó khỏi bảng/Excel/Ảnh xuất (kể cả bỏ tick hết = không còn deal nào).
+    if(window._v8Brands && window._v8Brands.length) rows=rows.filter(r=>selected.has(r.brand));
     const q=($id('promoSearch')?.value||'').toLowerCase().trim();
     if(q)rows=rows.filter(r=>String(r.name).toLowerCase().includes(q)||String(r.ma).includes(q)||String(r.km||'').toLowerCase().includes(q));
     const minPct=+($id('v8MinPct')?.value||window.PROMO_MIN_PCT||0.03), minSave=+($id('v8MinSave')?.value||window.PROMO_MIN_SAVE||0);
@@ -2893,6 +2929,122 @@ function promoFinalInfo(r){
     lines.push(''); lines.push('Anh/chị ưu tiên tư vấn các mã trên trong hôm nay.');
     const text=lines.join('\n'), ok=()=>toast(`✓ Đã copy ${rows.length} mã để gửi nhân viên`);
     if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(ok).catch(()=>{const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);ok();});
+  };
+
+  // ── Xuất Ảnh: vẽ danh sách deal đang lọc (đúng hãng đã tick) thành 1 ảnh PNG để gửi Zalo/nhóm NV ──
+  function wrapCanvasText(ctx,text,maxWidth,maxLines){
+    const words=String(text||'').split(/\s+/).filter(Boolean);
+    const lines=[]; let cur='';
+    for(const w of words){
+      const test=cur?cur+' '+w:w;
+      if(ctx.measureText(test).width>maxWidth && cur){ lines.push(cur); cur=w; if(maxLines&&lines.length>=maxLines)break; } else cur=test;
+    }
+    if(cur && (!maxLines||lines.length<maxLines)) lines.push(cur);
+    if(maxLines && lines.length>=maxLines){
+      let last=lines[maxLines-1]||'';
+      while(ctx.measureText(last+'…').width>maxWidth && last.length>1) last=last.slice(0,-1);
+      lines[maxLines-1]=last+'…';
+      return lines.slice(0,maxLines);
+    }
+    return lines;
+  }
+  function rr(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+  function buildPromoCanvas(rows,brandLabel,prTxt,today){
+    const W=1000,PAD=28,CW=W-PAD*2;
+    const cv=document.createElement('canvas'); const ctx=cv.getContext('2d');
+    const rowLayouts=rows.map(r=>{
+      ctx.font='700 16px Arial';
+      const nameLines=wrapCanvasText(ctx,r.name,CW-56,2);
+      ctx.font='12px Arial';
+      const kmText=`KM: ${r.km||'Giảm trực tiếp trên giá bán'}`;
+      const kmLines=wrapCanvasText(ctx,kmText,CW-56,3);
+      const h=16+nameLines.length*22+6+16+8+30+6+kmLines.length*16+16;
+      return {r,nameLines,kmLines,h};
+    });
+    const headerH=118, footerH=56;
+    const totalH=headerH+rowLayouts.reduce((s,x)=>s+x.h,0)+footerH;
+    cv.width=W; cv.height=totalH;
+    // nền
+    ctx.fillStyle='#0f172a'; ctx.fillRect(0,0,W,totalH);
+    // header
+    const grad=ctx.createLinearGradient(0,0,W,headerH); grad.addColorStop(0,'#1d4ed8'); grad.addColorStop(1,'#7c3aed');
+    ctx.fillStyle=grad; ctx.fillRect(0,0,W,headerH);
+    ctx.fillStyle='#fff'; ctx.font='800 22px Arial'; ctx.textBaseline='alphabetic';
+    ctx.fillText(`🔥 CƠ HỘI BÁN HÀNG HÔM NAY - ${String(window.tplName||tplName||'').toUpperCase()}`,PAD,42);
+    ctx.font='600 13px Arial'; ctx.fillStyle='#e0e7ff';
+    ctx.fillText(`Hãng: ${brandLabel}`,PAD,68);
+    ctx.fillText(`Phân khúc giá gốc: ${prTxt}  |  Top ${rows.length}  |  Giá cuối: ${mode()==='max'?'Tối đa':'An toàn'}  |  Ngày: ${today}`,PAD,90);
+    // rows
+    let y=headerH;
+    rowLayouts.forEach((L,i)=>{
+      const r=L.r;
+      ctx.fillStyle=i%2===0?'#111827':'#0f172a'; ctx.fillRect(0,y,W,L.h);
+      let ty=y+16;
+      // badge số thứ tự
+      ctx.fillStyle='#f59e0b'; rr(ctx,PAD,ty-16,26,22,6); ctx.fill();
+      ctx.fillStyle='#111827'; ctx.font='800 12px Arial'; ctx.textAlign='center';
+      ctx.fillText(String(i+1),PAD+13,ty-1); ctx.textAlign='left';
+      // tên sản phẩm
+      ctx.fillStyle='#f8fafc'; ctx.font='700 16px Arial';
+      L.nameLines.forEach((ln,li)=>{ ctx.fillText(ln,PAD+38,ty+li*22); });
+      ty+=L.nameLines.length*22+6;
+      // mã + giá gốc
+      ctx.font='12px Arial'; ctx.fillStyle='#94a3b8';
+      ctx.fillText(`Mã SP: ${r.ma}   •   Giá gốc: ${fmtP(r.gg)}đ`,PAD+38,ty+2);
+      ty+=24;
+      // giá cuối + badge tiết kiệm/%
+      ctx.font='800 18px Arial'; ctx.fillStyle='#4ade80';
+      const priceLbl=`👉 ${fmtP(r.pricePromo)}đ`;
+      ctx.fillText(priceLbl,PAD+38,ty+16);
+      const pw=ctx.measureText(priceLbl).width;
+      const saveTxt=`-${fmtP(r.save)}đ (${(r.pctPromo*100).toFixed(1)}%)`;
+      ctx.font='800 12px Arial'; const sw=ctx.measureText(saveTxt).width+16;
+      ctx.fillStyle='#fee2e2'; rr(ctx,PAD+38+pw+12,ty-2,sw,22,11); ctx.fill();
+      ctx.fillStyle='#991b1b'; ctx.fillText(saveTxt,PAD+38+pw+20,ty+13);
+      ty+=32;
+      // km chi tiết
+      ctx.font='12px Arial'; ctx.fillStyle='#cbd5e1';
+      L.kmLines.forEach((ln,li)=>{ ctx.fillText(ln,PAD+38,ty+li*16); });
+      y+=L.h;
+      ctx.strokeStyle='#1e293b'; ctx.beginPath(); ctx.moveTo(PAD,y-0.5); ctx.lineTo(W-PAD,y-0.5); ctx.stroke();
+    });
+    // footer
+    ctx.fillStyle='#1e293b'; ctx.fillRect(0,y,W,footerH);
+    ctx.fillStyle='#e2e8f0'; ctx.font='700 13px Arial';
+    ctx.fillText('Anh/chị ưu tiên tư vấn các mã trên trong hôm nay.',PAD,y+34);
+    return cv;
+  }
+  function downloadCanvas(cv,fname){
+    return new Promise(resolve=>{
+      cv.toBlob(blob=>{
+        if(!blob){resolve();return;}
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(()=>URL.revokeObjectURL(url),4000);
+        resolve();
+      },'image/png');
+    });
+  }
+  // Mỗi hãng (đã tick) xuất riêng 1 ảnh — dễ xem, dễ tư vấn theo từng hãng.
+  window.exportPromoImage=async function(){
+    const allRows=(typeof getPromoFiltered==='function'?getPromoFiltered():[]).slice(0,+($id('v8TopLimit')?.value||30));
+    if(!allRows.length){toast('Không có deal khớp bộ lọc để xuất ảnh (kiểm tra lại hãng đã tick)',false);return;}
+    const prTxt=$id('v8PriceRange')?.selectedOptions?.[0]?.textContent||'Tất cả phân khúc';
+    const today=new Date().toLocaleDateString('vi-VN');
+    // gom theo hãng, giữ đúng thứ tự đã sắp xếp trong allRows
+    const byBrand=new Map();
+    allRows.forEach(r=>{ const b=r.brand||'Khác'; if(!byBrand.has(b))byBrand.set(b,[]); byBrand.get(b).push(r); });
+    const brandList=[...byBrand.keys()];
+    let count=0;
+    for(let i=0;i<brandList.length;i++){
+      const brand=brandList[i], rows=byBrand.get(brand);
+      const cv=buildPromoCanvas(rows,brand,prTxt,today);
+      const fname=`KM_${String(brand).replace(/[^\w]+/g,'_')}_${today.replace(/\//g,'-')}.png`;
+      await downloadCanvas(cv,fname);
+      count++;
+      if(i<brandList.length-1) await new Promise(res=>setTimeout(res,350)); // giãn cách để trình duyệt không chặn tải nhiều file cùng lúc
+    }
+    toast(`✓ Đã xuất ${count} ảnh (${count} hãng), tổng ${allRows.length} deal`);
   };
 })();
 
