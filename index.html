@@ -448,6 +448,7 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
     <span class="sec-t">Danh mục sản phẩm</span>
     <span id="catBadge" style="font-size:10px;color:var(--t2);background:var(--bg3);padding:2px 8px;border-radius:20px;margin-left:6px"></span>
     <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-gn btn-sm" onclick="catExportExcel()" title="Xuất Mã SP đang lọc ra file Excel (Mẫu in giá)">📤 Xuất Excel</button>
       <button class="btn btn-ghost btn-sm" onclick="catalogClearAll()" title="Xoá toàn bộ danh mục">🗑 Xoá tất cả</button>
       <button class="btn btn-ghost btn-sm" onclick="toggleCard('catCardBody',this)">▲ Ẩn</button>
     </div>
@@ -480,13 +481,14 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
 
 <!-- STEP 1: NHÓM HÀNG -->
 <div class="card">
-  <div class="card-head"><div class="sec-n">1</div><span class="sec-t">Chọn nhóm hàng</span><span class="sec-sub" style="margin-left:4px">— 7 ngành hàng</span>
+  <div class="card-head"><div class="sec-n">1</div><span class="sec-t">Chọn nhóm hàng</span><span class="sec-sub" style="margin-left:4px">— 8 ngành hàng</span>
     <button class="btn btn-ghost btn-sm" id="btnToggleStep1" style="margin-left:auto" onclick="toggleCard('step1Body',this)">▲ Ẩn</button>
   </div>
   <div class="card-body" id="step1Body">
     <div class="tgrid">
       <div class="tcard on" data-id="58" onclick="selTpl(58,'Điện Thoại','dt58',this)"><span class="ti">📱</span><div class="tn">Điện Thoại</div><div class="tc">Mẫu 58</div></div>
       <div class="tcard" data-id="57" onclick="selTpl(57,'Laptop','dt58',this)"><span class="ti">💻</span><div class="tn">Laptop</div><div class="tc">Mẫu 58</div></div>
+      <div class="tcard" data-id="82" onclick="selTpl(82,'PK - 81','pk81',this)"><span class="ti">🎧</span><div class="tn">PK - 81</div><div class="tc">Mẫu 81</div></div>
       <div class="tcard" data-id="53" onclick="selTpl(53,'Điện Gia Dụng','dt58',this)"><span class="ti">🏠</span><div class="tn">Điện Gia Dụng</div><div class="tc">Mẫu 58</div></div>
       <div class="tcard" data-id="96" onclick="selTpl(96,'Máy Lạnh','mau96',this)"><span class="ti">❄️</span><div class="tn">Máy Lạnh</div><div class="tc">Mẫu 96</div></div>
       <div class="tcard" data-id="97" onclick="selTpl(97,'Điện Tử – Điện Lạnh','mau97',this)"><span class="ti">📺</span><div class="tn">Điện Tử – Điện Lạnh</div><div class="tc">Mẫu 97</div></div>
@@ -981,6 +983,16 @@ function parseAuto(data,fmt){
       if(rg&&String(rg).trim()&&String(rg)!=='nan'){gg=pp(rg);gi=pp(rgi);}else{gg=pp(rgi);gi=null;}
       if(gg&&gi&&gg===gi)gi=null;
       km=String(row[6]||'').trim();if(km==='nan')km='';
+    }else if(fmt==='pk81'){
+      // PK - 81 — Gia_PK_CN_*.xlsx: [0]=Tên SP, [1]=Bảo hành (không gộp vào tên), [36]=Barcode, [4]=Giá gốc, [5]=Giá KM, [7]=Ghi chú/KM
+      name=String(row[0]||'').trim();if(!name||name==='nan')return;
+      const bc=String(row[36]??'').replace(/\D/g,'').padStart(13,'0').slice(-13);
+      if(!bc||bc==='0000000000000')return;
+      ma=bc;
+      const rg=row[4],rgi=row[5];
+      if(rg&&String(rg).trim()&&String(rg)!=='nan'){gg=pp(rg);gi=pp(rgi);}else{gg=pp(rgi);gi=null;}
+      if(gg&&gi&&gg===gi)gi=null;
+      km=String(row[7]||'').trim();if(km==='nan')km='';
     }else{
       // dt58 — Điện Gia Dụng, Máy Lọc Nước, Điện Thoại, Laptop
       const c6=row[6]?String(row[6]).replace(/\D/g,'').padStart(13,'0').slice(-13):'';
@@ -1145,14 +1157,18 @@ function renderCatalogTabs(){
   const mtBadge=$('mtCatBadge');if(mtBadge)mtBadge.textContent=list.length;
 }
 function catSelGroup(k){catActiveGroup=k;renderCatalog();}
-function renderCatalog(){
-  renderCatalogTabs();
+function getCatalogFiltered(){
   const cat=catalogLoad();
   let list=Object.values(cat);
   if(catActiveGroup)list=list.filter(p=>p.group===catActiveGroup);
   const q=($('catSearch')?.value||'').toLowerCase().trim();
   if(q)list=list.filter(p=>p.name.toLowerCase().includes(q)||p.ma.includes(q)||(p.brand||'').toLowerCase().includes(q));
   list.sort((a,b)=>(a.brand||'').localeCompare(b.brand||'','vi')||a.name.localeCompare(b.name,'vi'));
+  return list;
+}
+function renderCatalog(){
+  renderCatalogTabs();
+  const list=getCatalogFiltered();
   const rc=$('catRcnt');if(rc)rc.textContent=`${list.length} sản phẩm`;
   const body=$('catTbody');if(!body)return;
   if(!list.length){body.innerHTML=`<tr><td colspan="5" style="text-align:center;color:var(--t2);padding:20px">Chưa có sản phẩm nào${catActiveGroup?' trong nhóm này':''}. So sánh giá 1 lần để tự động lưu.</td></tr>`;return;}
@@ -1212,6 +1228,23 @@ function catalogClearAll(){
   GAS.save('catalog',{});
   renderCatalog();
   toast('✓ Đã xoá toàn bộ danh mục');
+}
+function catExportExcel(){
+  const list=getCatalogFiltered();
+  if(!list.length){toast('Không có sản phẩm nào để xuất (theo bộ lọc hiện tại)',false);return;}
+  const wb=XLSX.utils.book_new();
+  const ws={};
+  const hdrStyle=xStyle(xFont('Arial',11,true,'000000'),'E2F3DF',xAlign('center','center'));
+  const cellStyle=xStyle(xFont('Arial',11,false,'000000'),null,xAlign('left','center'));
+  xCell(ws,0,0,'Mã sản phẩm',hdrStyle);
+  list.forEach((p,i)=>{xCell(ws,i+1,0,String(p.ma||''),cellStyle);});
+  ws['!cols']=[{wch:20}];
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:list.length,c:0}});
+  XLSX.utils.book_append_sheet(wb,ws,'Sheet1');
+  const today=new Date().toLocaleDateString('vi-VN').replace(/\//g,'-');
+  const groupTag=catActiveGroup?'_'+catActiveGroup.replace(/[\s–—\/]+/g,'_'):'';
+  XLSX.writeFile(wb,`MauInGia${groupTag}_${today}.xlsx`,{cellStyles:true});
+  toast(`✓ Đã xuất ${list.length} mã sản phẩm ra Excel`);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2435,8 +2468,8 @@ function setupAutoDate(){
       <div class="v8-title">🎛 Bộ lọc báo cáo gửi ngay</div>
       <div class="v8-grid">
         <div class="v8-field"><label>Hãng</label><select id="v8BrandSelect" onchange="v8SelectBrand(this.value)"><option value="">Tất cả hãng</option></select></div>
-        <div class="v8-field"><label>% giảm tối thiểu</label><select id="v8MinPct" onchange="renderPromoTbl();renderPromoChart()"><option value="0.05">≥ 5%</option><option value="0.08">≥ 8%</option><option value="0.10" selected>≥ 10%</option><option value="0.15">≥ 15%</option><option value="0.20">≥ 20%</option><option value="0.30">≥ 30%</option></select></div>
-        <div class="v8-field"><label>Tiết kiệm tối thiểu</label><select id="v8MinSave" onchange="renderPromoTbl();renderPromoChart()"><option value="100000">≥ 100K</option><option value="300000">≥ 300K</option><option value="500000" selected>≥ 500K</option><option value="1000000">≥ 1 triệu</option><option value="2000000">≥ 2 triệu</option><option value="5000000">≥ 5 triệu</option></select></div>
+        <div class="v8-field"><label>% giảm tối thiểu</label><select id="v8MinPct" onchange="renderPromoTbl();renderPromoChart()"><option value="0">Từ 0%</option><option value="0.05">≥ 5%</option><option value="0.08">≥ 8%</option><option value="0.10" selected>≥ 10%</option><option value="0.15">≥ 15%</option><option value="0.20">≥ 20%</option><option value="0.30">≥ 30%</option></select></div>
+        <div class="v8-field"><label>Tiết kiệm tối thiểu</label><select id="v8MinSave" onchange="renderPromoTbl();renderPromoChart()"><option value="0">Từ 0đ</option><option value="100000">≥ 100K</option><option value="300000">≥ 300K</option><option value="500000" selected>≥ 500K</option><option value="1000000">≥ 1 triệu</option><option value="2000000">≥ 2 triệu</option><option value="5000000">≥ 5 triệu</option></select></div>
         <div class="v8-field"><label>Phân khúc giá gốc</label><select id="v8PriceRange" onchange="renderPromoTbl();renderPromoChart()"><option value="">Tất cả</option><option value="0-5000000">Dưới 5 triệu</option><option value="5000000-10000000">5 - 10 triệu</option><option value="10000000-15000000">10 - 15 triệu</option><option value="15000000-20000000">15 - 20 triệu</option><option value="20000000-30000000">20 - 30 triệu</option><option value="30000000-50000000">30 - 50 triệu</option><option value="50000000-999999999">Trên 50 triệu</option></select></div>
         <div class="v8-field"><label>Loại ưu đãi</label><select id="v8PromoType" onchange="renderPromoTbl();renderPromoChart()"><option value="">Tất cả</option><option value="gift">Có quà/voucher</option><option value="installment">Có trả góp/trả chậm</option><option value="voucher">Có voucher/cashback</option></select></div>
         <div class="v8-field"><label>Số dòng xuất</label><select id="v8TopLimit"><option value="20">Top 20</option><option value="30" selected>Top 30</option><option value="50">Top 50</option><option value="100">Top 100</option><option value="9999">Tất cả</option></select></div>
