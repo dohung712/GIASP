@@ -456,13 +456,16 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
   <div class="card-body" id="catCardBody">
     <div style="font-size:11px;color:var(--t2);margin-bottom:8px;font-weight:600">Mỗi lần bấm ⚡ So sánh giá, Hãng / Mã SP / Tên SP sẽ tự lưu vào đây — trùng Mã SP sẽ cập nhật theo bản ghi mới nhất. Nhóm hàng tự đoán theo tên, sai thì bấm ✏ để sửa tay.</div>
     <div class="htabs" id="catTabs"></div>
+    <div id="catListFilterBanner" style="display:none;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px"></div>
     <div class="ctrlbar">
       <input class="sinp" id="catSearch" placeholder="🔍 Tên / mã SP / hãng..." oninput="renderCatalog()">
       <span class="rcnt" id="catRcnt"></span>
     </div>
+    <div id="catSelBar" style="display:none;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px"></div>
     <div class="tbl-wrap" style="max-height:480px">
       <table>
         <thead><tr>
+          <th style="min-width:34px;text-align:center"><input type="checkbox" id="catSelectAllBox" onchange="catToggleSelectAll(this)" title="Chọn tất cả (đang lọc)"></th>
           <th style="min-width:70px">Hãng</th>
           <th style="min-width:130px">Mã SP</th>
           <th style="min-width:280px">Tên sản phẩm</th>
@@ -472,6 +475,22 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
         <tbody id="catTbody"></tbody>
       </table>
     </div>
+  </div>
+</div>
+
+<!-- SAVED CATALOG LISTS -->
+<div class="card" id="catListsCard">
+  <div class="card-head">
+    <span style="font-size:15px">📁</span>
+    <span class="sec-t">Danh sách đã lưu</span>
+    <span id="catListsBadge" style="font-size:10px;color:var(--t2);background:var(--bg3);padding:2px 8px;border-radius:20px;margin-left:6px"></span>
+    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="toggleCard('catListsCardBody',this)">▲ Ẩn</button>
+    </div>
+  </div>
+  <div class="card-body" id="catListsCardBody">
+    <div style="font-size:11px;color:var(--t2);margin-bottom:8px;font-weight:600">Tick chọn sản phẩm ở bảng Danh mục phía trên rồi bấm "💾 Lưu thành danh sách" để tạo 1 danh sách đặt tên tuỳ ý. Danh sách sẽ tự đồng bộ lên Google Sheets nếu đã cấu hình, dùng chung được cho nhiều máy.</div>
+    <div id="catListsGrid" style="display:flex;flex-direction:column;gap:8px"></div>
   </div>
 </div>
 
@@ -760,7 +779,7 @@ function switchMainTab(tab){
 //  Nếu để trống GAS_URL: tool vẫn chạy bình thường, nhưng Danh mục/Lịch sử
 //  chỉ lưu riêng trên từng máy (localStorage) — KHÔNG dùng chung được.
 // ═══════════════════════════════════════════════════════
-const GAS_URL='https://script.google.com/macros/s/AKfycbwhn0UGnVzVszmFRiGQeNna0hR4mPqMpz5UxvsrXQdfdzfHqxWANI_uvzQ7BQq-Nomo/exec'; // <-- dán URL Web App Apps Script vào đây sau khi deploy (xem hướng dẫn trên)
+const GAS_URL='https://script.google.com/macros/s/AKfycbxQkdHh0mn-Zhjqfa5ZT0ZHA7USCYMhmVZoxYl0FnOnQS7CgoHcItqHYAkwkkujJzcD/exec'; // <-- dán URL Web App Apps Script vào đây sau khi deploy (xem hướng dẫn trên)
 const GAS={
   enabled:()=>!!GAS_URL,
   _timers:{},
@@ -1127,12 +1146,15 @@ function doCmp(){
 //  DANH MỤC SẢN PHẨM (Hãng / Mã SP / Tên SP — tự lưu, dedup theo Mã SP)
 // ═══════════════════════════════════════════════════════
 const CAT_KEY='bgp_catalog_v1';
+const CATLIST_KEY='bgp_catlists_v1';
 const CAT_GROUPS=[
   {k:'Điện Thoại',ic:'📱'},{k:'Laptop',ic:'💻'},{k:'Điện Gia Dụng',ic:'🏠'},
   {k:'Tivi',ic:'📺'},{k:'Tủ Lạnh',ic:'🧊'},{k:'Máy Lạnh',ic:'❄️'},
   {k:'Máy Giặt',ic:'🌀'},{k:'Máy Lọc Nước',ic:'💧'},{k:'Gia Dụng Lắp Đặt',ic:'🔧'},{k:'Khác',ic:'📦'}
 ];
 let catActiveGroup='';
+let catSelected=new Set();
+let catListFilterKey=null;
 function normVN(s){return String(s||'').toLowerCase().replace(/đ/g,'d').normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
 let catalogCache=null;
 function catalogLoad(){
@@ -1144,6 +1166,17 @@ function catalogSaveAll(obj){
   catalogCache=obj;
   try{localStorage.setItem(CAT_KEY,JSON.stringify(obj));}catch(e){console.error('Lỗi lưu danh mục',e);}
   GAS.save('catalog',obj);
+}
+let catListsCache=null;
+function catListsLoad(){
+  if(catListsCache)return catListsCache;
+  try{catListsCache=JSON.parse(localStorage.getItem(CATLIST_KEY)||'{}');}catch(e){catListsCache={};}
+  return catListsCache;
+}
+function catListsSaveAll(obj){
+  catListsCache=obj;
+  try{localStorage.setItem(CATLIST_KEY,JSON.stringify(obj));}catch(e){console.error('Lỗi lưu danh sách',e);}
+  GAS.save('catlists',obj);
 }
 function detectGroup(name,tplHint){
   const n=normVN(name);
@@ -1197,6 +1230,11 @@ function catSelGroup(k){catActiveGroup=k;renderCatalog();}
 function getCatalogFiltered(){
   const cat=catalogLoad();
   let list=Object.values(cat);
+  if(catListFilterKey){
+    const lst=catListsLoad()[catListFilterKey];
+    const items=new Set(lst?.items||[]);
+    list=list.filter(p=>items.has(p.ma));
+  }
   if(catActiveGroup)list=list.filter(p=>p.group===catActiveGroup);
   const q=($('catSearch')?.value||'').toLowerCase().trim();
   if(q)list=list.filter(p=>p.name.toLowerCase().includes(q)||p.ma.includes(q)||(p.brand||'').toLowerCase().includes(q));
@@ -1207,12 +1245,21 @@ function renderCatalog(){
   renderCatalogTabs();
   const list=getCatalogFiltered();
   const rc=$('catRcnt');if(rc)rc.textContent=`${list.length} sản phẩm`;
+  const banner=$('catListFilterBanner');
+  if(banner){
+    if(catListFilterKey){
+      const lst=catListsLoad()[catListFilterKey];
+      banner.style.display='flex';
+      banner.innerHTML=`<span>📁 Đang xem danh sách: <strong>${esc(catListFilterKey)}</strong> (${lst?.items?.length||0} SP)</span><button class="btn btn-ghost btn-sm" onclick="catListClearFilter()">✕ Bỏ lọc</button>`;
+    }else{banner.style.display='none';banner.innerHTML='';}
+  }
   const body=$('catTbody');if(!body)return;
-  if(!list.length){body.innerHTML=`<tr><td colspan="5" style="text-align:center;color:var(--t2);padding:20px">Chưa có sản phẩm nào${catActiveGroup?' trong nhóm này':''}. So sánh giá 1 lần để tự động lưu.</td></tr>`;return;}
+  if(!list.length){body.innerHTML=`<tr><td colspan="6" style="text-align:center;color:var(--t2);padding:20px">Chưa có sản phẩm nào${catActiveGroup?' trong nhóm này':''}. So sánh giá 1 lần để tự động lưu.</td></tr>`;renderCatSelBar();renderCatalogLists();return;}
   const escC=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const optsHtml=CAT_GROUPS.map(g=>`<option value="${g.k}">${g.ic} ${g.k}</option>`).join('');
   body.innerHTML=list.map(p=>`
     <tr data-ma="${escC(p.ma)}">
+      <td style="text-align:center"><input type="checkbox" onchange="catToggleSelect('${escC(p.ma).replace(/'/g,"\\'")}',this)" ${catSelected.has(p.ma)?'checked':''}></td>
       <td>${escC(p.brand)||'—'}</td>
       <td style="font-family:var(--mono);font-size:11px">${escC(p.ma)}</td>
       <td>${escC(p.name)}</td>
@@ -1223,12 +1270,39 @@ function renderCatalog(){
       </td>
     </tr>`).join('');
   window._catGroupOptsHtml=optsHtml;
+  const selAllBox=$('catSelectAllBox');
+  if(selAllBox)selAllBox.checked=list.length>0&&list.every(p=>catSelected.has(p.ma));
+  renderCatSelBar();
+  renderCatalogLists();
 }
+function catToggleSelect(ma,el){
+  if(el.checked)catSelected.add(ma);else catSelected.delete(ma);
+  renderCatSelBar();
+  const list=getCatalogFiltered();
+  const selAllBox=$('catSelectAllBox');
+  if(selAllBox)selAllBox.checked=list.length>0&&list.every(p=>catSelected.has(p.ma));
+}
+function catToggleSelectAll(el){
+  const list=getCatalogFiltered();
+  if(el.checked)list.forEach(p=>catSelected.add(p.ma));
+  else list.forEach(p=>catSelected.delete(p.ma));
+  renderCatalog();
+}
+function catClearSelection(){catSelected.clear();renderCatalog();}
+function renderCatSelBar(){
+  const bar=$('catSelBar');if(!bar)return;
+  const n=catSelected.size;
+  if(!n){bar.style.display='none';bar.innerHTML='';return;}
+  bar.style.display='flex';
+  bar.innerHTML=`<span><strong>${n}</strong> sản phẩm đã chọn</span><button class="btn btn-gn btn-sm" onclick="catSaveSelectedAsList()">💾 Lưu thành danh sách</button><button class="btn btn-ghost btn-sm" onclick="catClearSelection()">✕ Bỏ chọn</button>`;
+}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function catEditRow(ma){
   const cat=catalogLoad();const p=cat[ma];if(!p)return;
   const tr=document.querySelector(`#catTbody tr[data-ma="${CSS.escape(ma)}"]`);if(!tr)return;
   const optsHtml=CAT_GROUPS.map(g=>`<option value="${g.k}" ${g.k===p.group?'selected':''}>${g.ic} ${g.k}</option>`).join('');
   tr.innerHTML=`
+    <td></td>
     <td><input class="uinp" id="catEdBrand" value="${String(p.brand||'').replace(/"/g,'&quot;')}" style="padding:5px 7px;font-size:12px"></td>
     <td style="font-family:var(--mono);font-size:11px">${p.ma}</td>
     <td><input class="uinp" id="catEdName" value="${String(p.name||'').replace(/"/g,'&quot;')}" style="padding:5px 7px;font-size:12px"></td>
@@ -1265,6 +1339,93 @@ function catalogClearAll(){
   GAS.save('catalog',{});
   renderCatalog();
   toast('✓ Đã xoá toàn bộ danh mục');
+}
+function catSaveSelectedAsList(){
+  if(!catSelected.size){toast('Chưa chọn sản phẩm nào',false);return;}
+  const name=(prompt('Đặt tên cho danh sách này:')||'').trim();
+  if(!name)return;
+  const lists=catListsLoad();
+  const existed=!!lists[name];
+  if(existed&&!confirm(`Danh sách "${name}" đã tồn tại. Ghi đè bằng ${catSelected.size} sản phẩm đang chọn?`))return;
+  lists[name]={name,items:[...catSelected],updatedAt:Date.now(),createdAt:existed?lists[name].createdAt:Date.now()};
+  catListsSaveAll(lists);
+  toast(existed?`✓ Đã cập nhật danh sách "${name}" (${catSelected.size} SP)`:`✓ Đã lưu danh sách "${name}" (${catSelected.size} SP)`);
+  renderCatalogLists();
+}
+function catListUpdateFromSelection(name){
+  if(!catSelected.size){toast('Chưa chọn sản phẩm nào ở bảng Danh mục',false);return;}
+  const lists=catListsLoad();
+  if(!lists[name])return;
+  if(!confirm(`Cập nhật danh sách "${name}" thành ${catSelected.size} sản phẩm đang chọn?`))return;
+  lists[name]={...lists[name],items:[...catSelected],updatedAt:Date.now()};
+  catListsSaveAll(lists);
+  toast(`✓ Đã cập nhật "${name}" (${catSelected.size} SP)`);
+  renderCatalogLists();
+}
+function catListView(name){
+  catListFilterKey=name;catActiveGroup='';
+  const s=$('catSearch');if(s)s.value='';
+  renderCatalog();
+  $('catalogCard')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function catListClearFilter(){catListFilterKey=null;renderCatalog();}
+function catListRename(oldName){
+  const lists=catListsLoad();const lst=lists[oldName];if(!lst)return;
+  const newName=(prompt('Đổi tên danh sách:',oldName)||'').trim();
+  if(!newName||newName===oldName)return;
+  if(lists[newName]&&!confirm(`Danh sách "${newName}" đã tồn tại. Ghi đè?`))return;
+  delete lists[oldName];
+  lists[newName]={...lst,name:newName,updatedAt:Date.now()};
+  catListsSaveAll(lists);
+  if(catListFilterKey===oldName)catListFilterKey=newName;
+  toast('✓ Đã đổi tên danh sách');
+  renderCatalog();renderCatalogLists();
+}
+function catListDelete(name){
+  if(!confirm(`Xoá danh sách "${name}"? (Không xoá sản phẩm khỏi Danh mục, chỉ xoá danh sách này)`))return;
+  const lists=catListsLoad();delete lists[name];catListsSaveAll(lists);
+  if(catListFilterKey===name)catListFilterKey=null;
+  renderCatalog();renderCatalogLists();
+  toast('✓ Đã xoá danh sách');
+}
+function catListExportExcel(name){
+  const lists=catListsLoad();const lst=lists[name];
+  if(!lst||!lst.items?.length){toast('Danh sách trống',false);return;}
+  const wb=XLSX.utils.book_new();
+  const ws={};
+  const hdrStyle=xStyle(xFont('Arial',11,true,'000000'),'E2F3DF',xAlign('center','center'));
+  const cellStyle=xStyle(xFont('Arial',11,false,'000000'),null,xAlign('left','center'));
+  xCell(ws,0,0,'Mã sản phẩm',hdrStyle);
+  lst.items.forEach((ma,i)=>{xCell(ws,i+1,0,String(ma||''),cellStyle);});
+  ws['!cols']=[{wch:20}];
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:lst.items.length,c:0}});
+  XLSX.utils.book_append_sheet(wb,ws,'Sheet1');
+  const today=new Date().toLocaleDateString('vi-VN').replace(/\//g,'-');
+  XLSX.writeFile(wb,`DanhSach_${name.replace(/[\s–—\/]+/g,'_')}_${today}.xlsx`,{cellStyles:true});
+  toast(`✓ Đã xuất ${lst.items.length} mã từ danh sách "${name}"`);
+}
+function renderCatalogLists(){
+  const grid=$('catListsGrid');if(!grid)return;
+  const lists=catListsLoad();
+  const names=Object.keys(lists).sort((a,b)=>(lists[b].updatedAt||0)-(lists[a].updatedAt||0));
+  const badge=$('catListsBadge');if(badge)badge.textContent=names.length?`${names.length} danh sách`:'';
+  if(!names.length){grid.innerHTML=`<div style="color:var(--t2);font-size:12px;padding:10px 0">Chưa có danh sách nào. Tick chọn sản phẩm ở bảng trên và lưu lại.</div>`;return;}
+  grid.innerHTML=names.map(n=>{
+    const lst=lists[n];const cnt=lst.items?.length||0;
+    const dt=lst.updatedAt?new Date(lst.updatedAt).toLocaleString('vi-VN'):'';
+    const safe=n.replace(/'/g,"\\'");
+    return `<div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:10px 12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:160px">
+        <div style="font-weight:700">${esc(n)}</div>
+        <div style="font-size:11px;color:var(--t2)">${cnt} sản phẩm · cập nhật ${dt}</div>
+      </div>
+      <button class="btn btn-gn btn-sm" onclick="catListView('${safe}')" title="Xem danh sách này trong bảng Danh mục">👁 Xem</button>
+      <button class="btn btn-ghost btn-sm" onclick="catListUpdateFromSelection('${safe}')" title="Cập nhật danh sách này bằng các SP đang tick chọn ở bảng trên">🔄 Cập nhật</button>
+      <button class="btn btn-ghost btn-sm" onclick="catListExportExcel('${safe}')" title="Xuất Excel (Mẫu in giá)">📤 Xuất Excel</button>
+      <button class="btn btn-ghost btn-sm" onclick="catListRename('${safe}')" title="Đổi tên">✏ Đổi tên</button>
+      <button class="btn btn-ghost btn-sm" onclick="catListDelete('${safe}')" title="Xoá">🗑 Xoá</button>
+    </div>`;
+  }).join('');
 }
 function catExportExcel(){
   const list=getCatalogFiltered();
@@ -3620,7 +3781,7 @@ function promoFinalInfo(r){
   // ghi đè lên dữ liệu cục bộ rồi vẽ lại giao diện (Google Sheets là nguồn dữ liệu chuẩn).
   if(GAS.enabled()){
     setSyncBadge('sync');
-    Promise.all([GAS.load('catalog'),GAS.load('history')]).then(([cat,hist])=>{
+    Promise.all([GAS.load('catalog'),GAS.load('history'),GAS.load('catlists')]).then(([cat,hist,catlists])=>{
       let ok=true;
       // Danh mục: nếu Sheets đã có dữ liệu -> lấy làm chuẩn. Nếu Sheets đang trống
       // nhưng máy này đã có sẵn Danh mục -> đẩy dữ liệu máy lên Sheets (seed), KHÔNG xoá local.
@@ -3641,6 +3802,15 @@ function promoFinalInfo(r){
           if(local&&Object.keys(local).length)GAS.save('history',local);
         }
       }else{ok=false;}
+      // Danh sách đã lưu: tương tự
+      if(catlists&&typeof catlists==='object'){
+        if(Object.keys(catlists).length){
+          catListsCache=catlists;try{localStorage.setItem(CATLIST_KEY,JSON.stringify(catlists));}catch(e){}
+        }else{
+          const local=catListsLoad();
+          if(local&&Object.keys(local).length)GAS.save('catlists',local);
+        }
+      }
       renderCatalog();renderHist();
       setSyncBadge(ok?'ok':'err');
     }).catch(()=>setSyncBadge('err'));
