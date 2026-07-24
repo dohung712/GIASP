@@ -666,6 +666,39 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
       <div id="promoChart"></div>
     </div>
   </div>
+  <div class="card" id="noPromoCard" style="display:none">
+    <div class="card-head">
+      <div class="sec-n">—</div>
+      <span class="sec-t">📦 Sản phẩm không có khuyến mãi</span>
+      <span id="noPromoTitle" class="sec-sub" style="margin-left:4px"></span>
+      <span id="noPromoCnt" style="font-size:10px;color:var(--t2);background:var(--bg3);padding:2px 8px;border-radius:20px;margin-left:6px"></span>
+      <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="copyNoPromoCSV()" title="Copy danh sách">📋 Copy</button>
+        <button class="btn btn-ac btn-sm" onclick="exportNoPromoXlsx()" title="Xuất Excel danh sách này">📊 Xuất Excel</button>
+        <button class="btn btn-ghost btn-sm" id="btnToggleNoPromo" onclick="toggleCard('noPromoCardBody',this)">▲ Ẩn</button>
+      </div>
+    </div>
+    <div class="card-body" id="noPromoCardBody">
+      <div class="ctrlbar">
+        <select class="msel" id="noPromoBrand" onchange="renderNoPromoTbl()"><option value="">Tất cả hãng</option></select>
+        <input class="sinp" id="noPromoSearch" placeholder="🔍 Tên / mã SP..." oninput="renderNoPromoTbl()">
+        <span class="rcnt" id="noPromoRcnt"></span>
+      </div>
+      <div class="tbl-wrap" style="max-height:420px">
+        <table>
+          <thead><tr>
+            <th style="min-width:42px">STT</th>
+            <th style="min-width:115px">Mã SP</th>
+            <th style="min-width:240px">Tên sản phẩm</th>
+            <th style="min-width:78px">Hãng</th>
+            <th style="min-width:120px;text-align:right">Giá bán</th>
+            <th style="min-width:260px">Chi tiết khuyến mãi</th>
+          </tr></thead>
+          <tbody id="noPromoBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
 </div><!-- /results -->
 </div><!-- /tabCompare2 -->
@@ -954,13 +987,13 @@ function parseAuto(data,fmt){
   const p={};
   data.forEach(row=>{
     if(!row||row.length<5)return;
-    let ma='',name='',gg=null,gi=null,km='';
+    let ma='',name='',gg=null,gi=null,km='',noGg=false;
     if(fmt==='mau96'){
       if(row.length<52)return;
       name=String(row[44]||'').trim();if(!name||name==='nan')return;
       const bc=String(row[51]||'').replace(/\D/g,'').padStart(13,'0').slice(-13);
       if(!bc||bc==='0000000000000')return;
-      ma=bc;gg=pp(row[37]);gi=pp(row[38]);if(gg&&gi&&gg===gi)gi=null;
+      ma=bc;gg=pp(row[37]);gi=pp(row[38]);noGg=!gg;if(noGg){gg=gi;gi=null;}if(gg&&gi&&gg===gi)gi=null;
       km=Array.from({length:10},(_,i)=>String(row[45+i]||'').trim()).filter(s=>s&&s!=='nan').join(' • ');
     }else if(fmt==='mau97'){
       if(row.length<27)return;
@@ -969,7 +1002,8 @@ function parseAuto(data,fmt){
       if(!bc||bc==='0000000000000')return;
       ma=bc;
       const rg=row[15],rgi=row[16];
-      if(rg&&String(rg).trim()){gg=pp(rg);gi=pp(rgi);}else{gg=pp(rgi);gi=null;}
+      noGg=!(rg&&String(rg).trim());
+      if(!noGg){gg=pp(rg);gi=pp(rgi);}else{gg=pp(rgi);gi=null;}
       const skip=['HOME','MWG','SVFC','Ngày','MUA','ĐỔI'];
       km=Array.from({length:11},(_,i)=>String(row[29+i]||'').trim())
         .filter(s=>s&&s!=='nan'&&!skip.some(k=>s.startsWith(k))&&!/^\d+\.\d+%/.test(s)).join(' • ');
@@ -980,7 +1014,8 @@ function parseAuto(data,fmt){
       if(!bc||bc==='0000000000000')return;
       ma=bc;
       const rg=row[4],rgi=row[5];
-      if(rg&&String(rg).trim()&&String(rg)!=='nan'){gg=pp(rg);gi=pp(rgi);}else{gg=pp(rgi);gi=null;}
+      noGg=!(rg&&String(rg).trim()&&String(rg)!=='nan');
+      if(!noGg){gg=pp(rg);gi=pp(rgi);}else{gg=pp(rgi);gi=null;}
       if(gg&&gi&&gg===gi)gi=null;
       km=String(row[6]||'').trim();if(km==='nan')km='';
     }else if(fmt==='pk81'){
@@ -990,19 +1025,20 @@ function parseAuto(data,fmt){
       if(!bc||bc==='0000000000000')return;
       ma=bc;
       const rg=row[4],rgi=row[5];
-      if(rg&&String(rg).trim()&&String(rg)!=='nan'){gg=pp(rg);gi=pp(rgi);}else{gg=pp(rgi);gi=null;}
+      noGg=!(rg&&String(rg).trim()&&String(rg)!=='nan');
+      if(!noGg){gg=pp(rg);gi=pp(rgi);}else{gg=pp(rgi);gi=null;}
       if(gg&&gi&&gg===gi)gi=null;
       km=String(row[7]||'').trim();if(km==='nan')km='';
     }else{
       // dt58 — Điện Gia Dụng, Máy Lọc Nước, Điện Thoại, Laptop
       const c6=row[6]?String(row[6]).replace(/\D/g,'').padStart(13,'0').slice(-13):'';
       name=String(row[0]||'').trim();if(!name||!c6||c6==='0000000000000')return;
-      ma=c6;gg=pp(row[18]);gi=pp(row[20]);if(!gg){gg=gi;gi=null;}
+      ma=c6;gg=pp(row[18]);gi=pp(row[20]);noGg=!gg;if(noGg){gg=gi;gi=null;}
       km=String(row[7]||'').trim();if(km==='nan')km='';
     }
     if(!ma||!name)return;
     if(!p[ma]||(km||'').length>(p[ma].km||'').length)
-      p[ma]={ma,name,gg,gi,km,brand:brandOf(name)};
+      p[ma]={ma,name,gg,gi,km,brand:brandOf(name),noGg};
   });
   return p;
 }
@@ -1019,10 +1055,11 @@ function parseManual(data){
     const giRaw=mapCols.ggi>=0?pp(row[mapCols.ggi]):null;
     let km=mapCols.km>=0?String(row[mapCols.km]||'').trim():'';
     if(km==='nan')km='';
+    const noGg=!gg;
     const effGg=gg||(giRaw&&!gg?giRaw:null);
     const effGi=(giRaw&&effGg&&giRaw<effGg)?giRaw:null;
     if(!p[ma]||(km||'').length>(p[ma].km||'').length)
-      p[ma]={ma,name,gg:effGg,gi:effGi,km,brand:brandOf(name)};
+      p[ma]={ma,name,gg:effGg,gi:effGi,km,brand:brandOf(name),noGg};
   });
   return p;
 }
@@ -1417,6 +1454,12 @@ function doPromo(){
   const parse=manualMode?parseManual:d=>parseAuto(d,tplFmt);
   const m=parse(data);
   const allParsed=Object.values(m);
+  window.allPromoParsed=allParsed.map(r=>{
+    const gg=r.gg||null, gi=r.gi||null;
+    const save=(gg&&gi&&gg>gi)?gg-gi:0;
+    const pct=gg&&save?save/gg:0;
+    return {...r,pricePromo:gi||gg||null,save,pctPromo:pct,dealScore:0,dealTag:save>0?'':'— Không KM',label};
+  });
   promoRows=allParsed.map(r=>{
     const gg=r.gg||null, gi=r.gi||null;
     const save=(gg&&gi&&gg>gi)?gg-gi:0;
@@ -1453,6 +1496,80 @@ function doPromo(){
   }
   toast(promoRows.length?`✓ Tìm thấy ${promoRows.length} deal đáng gửi${catMsg}`:`Không có deal đủ mạnh (≥ ${(PROMO_MIN_PCT*100).toFixed(0)}% và ≥ ${fmtNum(PROMO_MIN_SAVE)}đ)${catMsg}`,!!promoRows.length);
   collapseAllCards();
+  renderNoPromoTbl();
+}
+function getNoPromoFiltered(){
+  const all=window.allPromoParsed||[];
+  const list=all.filter(r=>r.noGg===true);
+  const brand=$('noPromoBrand')?.value||'';
+  const q=($('noPromoSearch')?.value||'').toLowerCase().trim();
+  let rows=list;
+  if(brand)rows=rows.filter(r=>r.brand===brand);
+  if(q)rows=rows.filter(r=>r.name.toLowerCase().includes(q)||r.ma.includes(q));
+  rows=[...rows].sort((a,b)=>(a.brand||'').localeCompare(b.brand||'','vi')||a.name.localeCompare(b.name,'vi'));
+  return {all:list,rows};
+}
+function renderNoPromoTbl(){
+  const all=window.allPromoParsed||[];
+  const list=all.filter(r=>r.noGg===true);
+  const card=$('noPromoCard');
+  if(!card)return;
+  if(!list.length){card.style.display='none';return;}
+  card.style.display='block';
+  const brandSel=$('noPromoBrand');
+  if(brandSel){
+    const brands=[...new Set(list.map(r=>r.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi'));
+    const curVal=brandSel.value;
+    brandSel.innerHTML='<option value="">Tất cả hãng</option>'+brands.map(b=>`<option ${b===curVal?'selected':''}>${b}</option>`).join('');
+  }
+  const {rows}=getNoPromoFiltered();
+  $('noPromoTitle').textContent=`— ${tplName}`;
+  $('noPromoCnt').textContent=`${list.length} SP`;
+  $('noPromoRcnt').textContent=`${rows.length} / ${list.length} SP`;
+  $('noPromoBody').innerHTML=rows.map((r,i)=>`<tr>
+    <td style="text-align:center;color:var(--t2)">${i+1}</td>
+    <td><span class="mono">${r.ma}</span></td>
+    <td style="font-weight:500">${r.name}</td>
+    <td style="text-align:center"><span style="font-size:10px;color:var(--t2);background:var(--bg3);padding:2px 7px;border-radius:4px;white-space:nowrap">${r.brand||''}</span></td>
+    <td class="nr" style="font-weight:700">${fmtP(r.gg)}</td>
+    <td><div class="km-t">${r.km||''}</div></td>
+  </tr>`).join('');
+}
+function copyNoPromoCSV(){
+  const {rows}=getNoPromoFiltered();
+  if(!rows.length){toast('Không có sản phẩm nào để copy',false);return;}
+  const lines=['Mã SP\tTên sản phẩm\tHãng\tGiá bán\tChi tiết khuyến mãi'];
+  rows.forEach(r=>lines.push(`${r.ma}\t${r.name}\t${r.brand||''}\t${fmtP(r.gg)}\t${(r.km||'').replace(/\t/g,' ')}`));
+  const text=lines.join('\n');
+  const ok=()=>toast(`✓ Đã copy ${rows.length} SP không KM`);
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(ok).catch(()=>{const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);ok();});
+}
+function exportNoPromoXlsx(){
+  const {rows}=getNoPromoFiltered();
+  if(!rows.length){toast('Không có sản phẩm nào để xuất',false);return;}
+  const wb=XLSX.utils.book_new();
+  const ws={};
+  const hdrStyle=xStyle(xFont('Arial',10,true,'FFFFFF'),'475569',xAlign('center','center'));
+  const cellStyle=xStyle(xFont('Arial',9,false,'0F172A'),null,xAlign('left','center'));
+  const numStyle=xStyle(xFont('Arial',9,true,'0F172A'),null,xAlign('right','center'),null,'#,##0');
+  const headers=['Mã SP','Tên sản phẩm','Hãng','Giá bán','Chi tiết khuyến mãi'];
+  headers.forEach((h,c)=>xCell(ws,0,c,h,hdrStyle));
+  rows.forEach((r,i)=>{
+    const row=i+1;
+    xCell(ws,row,0,r.ma,cellStyle);
+    xCell(ws,row,1,r.name,cellStyle);
+    xCell(ws,row,2,r.brand||'',cellStyle);
+    xCell(ws,row,3,r.gg||0,numStyle);
+    xCell(ws,row,4,r.km||'',cellStyle);
+  });
+  ws['!cols']=[{wch:16},{wch:44},{wch:14},{wch:16},{wch:50}];
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length,c:4}})};
+  ws['!freeze']={xSplit:0,ySplit:1};
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length,c:4}});
+  XLSX.utils.book_append_sheet(wb,ws,'Sheet1');
+  const today=new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb,`SanPhamKhongKM_${tplName.replace(/[\s–—\/]+/g,'_')}_${today}.xlsx`,{cellStyles:true});
+  toast(`✓ Đã xuất ${rows.length} SP không KM ra Excel`);
 }
 function getPromoFiltered(){
   const brand=$('promoBrand').value;
@@ -1668,6 +1785,7 @@ function resetAll(){
   });
   $('results').style.display='none';
   $('promoCard').style.display='none';
+  if($('noPromoCard'))$('noPromoCard').style.display='none';
   $('btnCmp').disabled=true;
   $('btnPromo').disabled=true;
   toast('Đã reset');
@@ -2471,7 +2589,7 @@ function setupAutoDate(){
         <div class="v8-field"><label>% giảm tối thiểu</label><select id="v8MinPct" onchange="renderPromoTbl();renderPromoChart()"><option value="0">Từ 0%</option><option value="0.05">≥ 5%</option><option value="0.08">≥ 8%</option><option value="0.10" selected>≥ 10%</option><option value="0.15">≥ 15%</option><option value="0.20">≥ 20%</option><option value="0.30">≥ 30%</option></select></div>
         <div class="v8-field"><label>Tiết kiệm tối thiểu</label><select id="v8MinSave" onchange="renderPromoTbl();renderPromoChart()"><option value="0">Từ 0đ</option><option value="100000">≥ 100K</option><option value="300000">≥ 300K</option><option value="500000" selected>≥ 500K</option><option value="1000000">≥ 1 triệu</option><option value="2000000">≥ 2 triệu</option><option value="5000000">≥ 5 triệu</option></select></div>
         <div class="v8-field"><label>Phân khúc giá gốc</label><select id="v8PriceRange" onchange="renderPromoTbl();renderPromoChart()"><option value="">Tất cả</option><option value="0-5000000">Dưới 5 triệu</option><option value="5000000-10000000">5 - 10 triệu</option><option value="10000000-15000000">10 - 15 triệu</option><option value="15000000-20000000">15 - 20 triệu</option><option value="20000000-30000000">20 - 30 triệu</option><option value="30000000-50000000">30 - 50 triệu</option><option value="50000000-999999999">Trên 50 triệu</option></select></div>
-        <div class="v8-field"><label>Loại ưu đãi</label><select id="v8PromoType" onchange="renderPromoTbl();renderPromoChart()"><option value="">Tất cả</option><option value="gift">Có quà/voucher</option><option value="installment">Có trả góp/trả chậm</option><option value="voucher">Có voucher/cashback</option></select></div>
+        <div class="v8-field"><label>Loại ưu đãi</label><select id="v8PromoType" onchange="renderPromoTbl();renderPromoChart()"><option value="">Tất cả</option><option value="gift">Có quà/voucher</option><option value="installment">Có trả góp/trả chậm</option><option value="voucher">Có voucher/cashback</option><option value="none">Không có khuyến mãi</option></select></div>
         <div class="v8-field"><label>Số dòng xuất</label><select id="v8TopLimit"><option value="20">Top 20</option><option value="30" selected>Top 30</option><option value="50">Top 50</option><option value="100">Top 100</option><option value="9999">Tất cả</option></select></div>
       </div>
       <div class="brand-check-head">
@@ -2546,8 +2664,9 @@ function setupAutoDate(){
   window.doPromo=function(){
     oldDoPromo();
     installPromoPanel();
-    const brandsChanged=JSON.stringify(window._v8Brands||[])!==JSON.stringify([...new Set(promoRows.map(r=>r.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi')));
-    window._v8Brands=[...new Set(promoRows.map(r=>r.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi'));
+    const allBrandSrc=[...promoRows.map(r=>r.brand),...(window.allPromoParsed||[]).map(r=>r.brand)];
+    const brandsChanged=JSON.stringify(window._v8Brands||[])!==JSON.stringify([...new Set(allBrandSrc.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi')));
+    window._v8Brands=[...new Set(allBrandSrc.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi'));
     const opts='<option value="">Tất cả hãng</option>'+window._v8Brands.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');
     if(el('v8BrandSelect'))el('v8BrandSelect').innerHTML=opts;
     // Tick sẵn tất cả hãng mỗi khi danh sách hãng thay đổi (dữ liệu mới nạp). Bỏ tick 1 hãng = loại hãng đó ra khỏi bảng/Excel/Ảnh xuất.
@@ -2567,7 +2686,7 @@ function setupAutoDate(){
     if(q) rows=rows.filter(r=>String(r.name).toLowerCase().includes(q)||String(r.ma).includes(q)||String(r.km||'').toLowerCase().includes(q));
     const minPct=+(el('v8MinPct')?.value||PROMO_MIN_PCT);
     const minSave=+(el('v8MinSave')?.value||PROMO_MIN_SAVE);
-    rows=rows.filter(r=>r.pctPromo>=minPct && r.save>=minSave);
+    rows=rows.filter(r=>r.save>0 && r.pctPromo>=minPct && r.save>=minSave);
     const pr=el('v8PriceRange')?.value||'';
     if(pr){const [lo,hi]=pr.split('-').map(Number);rows=rows.filter(r=>(r.gg||0)>=lo&&(r.gg||0)<hi);}
     const kind=el('v8PromoType')?.value||'';
@@ -2733,17 +2852,18 @@ function setupAutoDate(){
 
   window.exportPromoXlsx=function(){
     const limit=+(el('v8TopLimit')?.value||30);
-    let rows=getPromoFiltered();
+    const allFiltered=getPromoFiltered();
+    let rows=allFiltered;
     if(limit<9999) rows=rows.slice(0,limit);
-    if(!rows.length){toast('Không có deal khớp bộ lọc để xuất',false);return;}
+    if(!allFiltered.length){toast('Không có deal khớp bộ lọc để xuất',false);return;}
     try{
       const wb=XLSX.utils.book_new();
       const label=(rawM?el('lM')?.value:el('lN')?.value)||new Date().toLocaleDateString('vi-VN');
-      buildDashboard(wb,rows,label);buildTopDeal(wb,rows);buildBrand(wb,rows);buildFull(wb,rows);
+      buildDashboard(wb,rows,label);buildTopDeal(wb,rows);buildBrand(wb,rows);buildFull(wb,allFiltered);
       const brandTxt=window._v8SelectedBrands?.size?[...window._v8SelectedBrands].join('_'):'TatCaHang';
       const fname=`CoHoiBanHang_${tplName.replace(/[\s–—\/]+/g,'_')}_${brandTxt.replace(/[\s–—\/]+/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
       XLSX.writeFile(wb,fname,{cellStyles:true});
-      toast(`✓ Xuất Excel đẹp ${rows.length} deal: ${fname}`);
+      toast(`✓ Xuất Excel đẹp: Top ${rows.length} deal + Full Data ${allFiltered.length} SP: ${fname}`);
     }catch(e){toast('Lỗi xuất Excel: '+e.message,false);console.error(e);}
   }
 
@@ -3009,7 +3129,7 @@ function promoFinalInfo(r){
     const q=(el('promoSearch')?.value||'').toLowerCase().trim();
     if(q) rows=rows.filter(r=>String(r.name).toLowerCase().includes(q)||String(r.ma).includes(q)||String(r.km||'').toLowerCase().includes(q));
     const minPct=+(el('v8MinPct')?.value||PROMO_MIN_PCT), minSave=+(el('v8MinSave')?.value||PROMO_MIN_SAVE);
-    rows=rows.filter(r=>(r.pctPromo||0)>=minPct && (r.save||0)>=minSave);
+    rows=rows.filter(r=>(r.save||0)>0 && (r.pctPromo||0)>=minPct && (r.save||0)>=minSave);
     const pr=el('v8PriceRange')?.value||''; if(pr){const [lo,hi]=pr.split('-').map(Number);rows=rows.filter(r=>(r.gg||0)>=lo&&(r.gg||0)<hi);}
     const kind=el('v8PromoType')?.value||''; if(kind) rows=rows.filter(r=>hasKMText2(r,kind));
     const mode=el('promoSort')?.value||'pct';
@@ -3251,17 +3371,27 @@ function promoFinalInfo(r){
     if(f.applied){out.pricePromo=f.finalPrice;out.save=f.save;out.pctPromo=f.pct;out.finalApplied=true;out.pmhDeduct=f.total;out.dealScore=Math.round((f.pct*100)*60 + Math.min(f.save/100000,50)*40);} return out;
   }
   window.getPromoFiltered=function(){
-    let base=[]; try{base=[...(window.promoRows||promoRows||[])];}catch(e){base=[];}
-    let rows=base.map(applySmart);
+    const kind=$id('v8PromoType')?.value||'';
+    let rows;
+    if(kind==='none'){
+      // Không có khuyến mãi = sản phẩm không hề có dữ liệu Giá gốc trong file nguồn (noGg), không áp ngưỡng % giảm / tiền giảm.
+      let all=[]; try{all=[...(window.allPromoParsed||[])];}catch(e){all=[];}
+      rows=all.filter(r=>r.noGg===true);
+    }else{
+      let base=[]; try{base=[...(window.promoRows||promoRows||[])];}catch(e){base=[];}
+      rows=base.map(applySmart);
+    }
     const selected=window._v8SelectedBrands||new Set();
     // Checkbox hãng: mặc định tick hết. Bỏ tick hãng nào -> loại hãng đó khỏi bảng/Excel/Ảnh xuất (kể cả bỏ tick hết = không còn deal nào).
     if(window._v8Brands && window._v8Brands.length) rows=rows.filter(r=>selected.has(r.brand));
     const q=($id('promoSearch')?.value||'').toLowerCase().trim();
     if(q)rows=rows.filter(r=>String(r.name).toLowerCase().includes(q)||String(r.ma).includes(q)||String(r.km||'').toLowerCase().includes(q));
-    const minPct=+($id('v8MinPct')?.value||window.PROMO_MIN_PCT||0.03), minSave=+($id('v8MinSave')?.value||window.PROMO_MIN_SAVE||0);
-    rows=rows.filter(r=>(r.pctPromo||0)>=minPct && (r.save||0)>=minSave);
+    if(kind!=='none'){
+      const minPct=+($id('v8MinPct')?.value||window.PROMO_MIN_PCT||0.03), minSave=+($id('v8MinSave')?.value||window.PROMO_MIN_SAVE||0);
+      rows=rows.filter(r=>((r.save||0)>0||r.finalApplied) && (r.pctPromo||0)>=minPct && (r.save||0)>=minSave);
+    }
     const pr=$id('v8PriceRange')?.value||''; if(pr){const [lo,hi]=pr.split('-').map(Number);rows=rows.filter(r=>(r.gg||0)>=lo&&(r.gg||0)<hi);}
-    const kind=$id('v8PromoType')?.value||''; if(kind)rows=rows.filter(r=>hasKMType(r,kind));
+    if(kind&&kind!=='none')rows=rows.filter(r=>hasKMType(r,kind));
     if(opt('v83OnlyMatched'))rows=rows.filter(r=>r.finalApplied);
     const sort=$id('promoSort')?.value||'pct';
     rows.sort((a,b)=>{if(sort==='amount')return (b.save-a.save)||(b.pctPromo-a.pctPromo)||(b.dealScore-a.dealScore); if(sort==='price')return (a.pricePromo-b.pricePromo)||(b.dealScore-a.dealScore); return (b.dealScore-a.dealScore)||(b.pctPromo-a.pctPromo)||(b.save-a.save);});
