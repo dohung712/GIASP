@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BangGia Pro v7</title>
+<title>BangGia Pro v9.1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Nunito:wght@300;400;600;700&family=Poppins:wght@300;400;500;600&family=Lexend:wght@300;400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600&family=Outfit:wght@300;400;500;600&family=Manrope:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -348,7 +348,7 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
 
 <!-- ════ TOPBAR ════ -->
 <div class="topbar">
-  <div class="logo">⚡ BangGia Pro <span class="logo-badge">v7</span></div>
+  <div class="logo">⚡ BangGia Pro <span class="logo-badge">v9.1</span></div>
   <div class="gas-badge gas-off" id="gasSyncBadge" title="Trạng thái đồng bộ Danh mục/Lịch sử">💾 Offline (lưu trên máy)</div>
   <div class="topbar-gap"></div>
   <div class="tdots">
@@ -411,6 +411,7 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
     <div class="gi"><div class="gnum">3</div><span>Sau khi so sánh, nhấn <strong style="color:var(--gn)">💾 Lưu ngày này</strong> để lưu vào lịch sử. Mỗi ngành lưu độc lập.</span></div>
     <div class="gi"><div class="gnum">4</div><span>Trong <strong style="color:var(--t0)">📅 Lịch sử</strong>: chọn 1 ngày xem chi tiết · chọn 2+ ngày so sánh xu hướng · xuất Excel nhiều ngày.</span></div>
     <div class="gi"><div class="gnum">5</div><span>6 chế độ xuất Excel: Chi tiết · KPI · Top biến động · Phân tích hãng. File đẹp chuẩn báo cáo.</span></div>
+    <div class="gi"><div class="gnum" style="background:var(--gn)">9</div><span><strong style="color:var(--t0)">Mới v9:</strong> KPI + biểu đồ hãng/phân khúc · tick <strong>🎁 Giảm 02/09</strong> &amp; <strong>🎟️ PMH T9</strong> ở “Giá Cuối thông minh” · bấm chip ưu đãi trên từng dòng để bật/tắt riêng · nút <strong>💾 Lưu cấu hình cột</strong> khi chỉnh cột thủ công.</span></div>
     <div class="gi"><div class="gnum" style="background:var(--am)">⌨</div><span><span class="kbd">Ctrl+Enter</span> So sánh &nbsp;·&nbsp; <span class="kbd">Ctrl+S</span> Lưu lịch sử &nbsp;·&nbsp; <span class="kbd">Ctrl+F</span> Tìm kiếm &nbsp;·&nbsp; <span class="kbd">Esc</span> Đóng cài đặt</span></div>
   </div>
 </div>
@@ -728,6 +729,7 @@ tr:hover td{background:color-mix(in srgb,var(--ac) 4%,var(--bg1))}
 </div><!-- /app -->
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 'use strict';
 // ═══════════════════════════════════════════════════════
@@ -3476,12 +3478,17 @@ function promoFinalInfo(r){
     if(opt('v83Trade'))keys.push('tradein');
     if(opt('v83Payment'))keys.push('payment');
     if(opt('v83Installment'))keys.push('installment');
+    if(opt('v83D0209'))keys.push('d0209');
+    if(opt('v83PMH9'))keys.push('pmh9');
     return new Set(keys);
   }
   function smartFinalInfo(r){
     const gg=+(r?.gg||0), price=+(r?.basePricePromo||r?.pricePromo||r?.gi||r?.gg||0);
     const keys=allowedKeys();
-    let items=extractSmartDeductions(r?.km).filter(x=>keys.has(x.key));
+    const _excl=window._v9Excl||new Set();
+    const _all=extractSmartDeductions(r?.km).concat(typeof v9ExtraDeductions==='function'?v9ExtraDeductions(r,price):[]).filter(x=>keys.has(x.key));
+    const skipped=_all.filter(x=>_excl.has((r?.ma||'')+'|'+x.key));
+    let items=_all.filter(x=>!_excl.has((r?.ma||'')+'|'+x.key));
     if(mode()==='safe')items=items.filter(x=>x.confidence==='safe'||x.key==='ms365'||x.key==='pmh'||x.key==='direct');
     // Loại khoản giảm đọc sai/số tiền vô lý: không cho một ưu đãi phụ lớn hơn giá KM.
     items=items.filter(x=>x.amount>0 && (!price || x.amount<price));
@@ -3495,7 +3502,7 @@ function promoFinalInfo(r){
     const finalPrice=Math.max(0,price-total);
     const save=gg?Math.max(0,gg-finalPrice):+(r?.save||0);
     const pct=gg&&save?Math.min(save/gg,0.999):+(r?.pctPromo||0);
-    return {items,total,finalPrice,save,pct,applied:total>0};
+    return {items,skipped,total,finalPrice,save,pct,applied:total>0};
   }
   window.smartFinalInfo=smartFinalInfo;
 
@@ -3514,6 +3521,8 @@ function promoFinalInfo(r){
         <label class="smart-ck"><input type="checkbox" id="v83Trade"><div><b>Thu cũ đổi mới</b><small>Trợ giá/giảm thêm khi thu cũ.</small></div></label>
         <label class="smart-ck"><input type="checkbox" id="v83Payment"><div><b>Thanh toán</b><small>Ví điện tử, ngân hàng, thẻ, cashback.</small></div></label>
         <label class="smart-ck"><input type="checkbox" id="v83Installment"><div><b>Trả góp</b><small>Ưu đãi giảm tiền khi trả góp.</small></div></label>
+        <label class="smart-ck"><input type="checkbox" id="v83D0209"><div><b>🎁 Giảm 02/09</b><small>Bảng giảm theo model (ĐT/Tablet/Ebook) + Laptop/LCD.</small></div></label>
+        <label class="smart-ck"><input type="checkbox" id="v83PMH9"><div><b>🎟️ PMH Tháng 9</b><small>PMH theo phân khúc giá, toàn ngành hàng.</small></div></label>
         <select class="smart-mode" id="v83FinalMode"><option value="safe">Giá cuối an toàn</option><option value="max">Giá cuối tối đa</option></select>
       </div>
       <div class="smart-note">Ghi chú: các khuyến mãi dạng quà tặng/PMH không ghi được quy đổi tiền sẽ không bị trừ. Các dòng có chữ “hoặc” chỉ lấy phương án giảm tiền tốt nhất trong nhóm, tránh cộng sai.</div>
@@ -3528,7 +3537,7 @@ function promoFinalInfo(r){
 
   function hasKMType(r,kw){const k=norm(r.km||'');return kw==='gift'?/(tang|qua|loa|voucher|phieu|op|tai nghe|balo)/.test(k):kw==='installment'?/(tra cham|tra gop|lai suat|0%|home|mcredit|fe credit)/.test(k):kw==='voucher'?/(voucher|phieu|coupon|ma giam|cashback|pmh)/.test(k):true;}
   function applySmart(r){
-    const f=smartFinalInfo(r); const out={...r,basePricePromo:r.basePricePromo||r.pricePromo,baseSave:r.baseSave||r.save,basePctPromo:r.basePctPromo||r.pctPromo,smartItems:f.items,smartDeduct:f.total,finalPrice:f.finalPrice};
+    const f=smartFinalInfo(r); const out={...r,basePricePromo:r.basePricePromo||r.pricePromo,baseSave:r.baseSave||r.save,basePctPromo:r.basePctPromo||r.pctPromo,smartItems:f.items,smartSkipped:f.skipped,smartDeduct:f.total,finalPrice:f.finalPrice};
     if(f.applied){out.pricePromo=f.finalPrice;out.save=f.save;out.pctPromo=f.pct;out.finalApplied=true;out.pmhDeduct=f.total;out.dealScore=Math.round((f.pct*100)*60 + Math.min(f.save/100000,50)*40);} return out;
   }
   window.getPromoFiltered=function(){
@@ -3593,7 +3602,7 @@ function promoFinalInfo(r){
     }
     const filterWrap=$id('v83OnlyMatchedWrap');
     if(filterWrap){
-      const labels={v83PMH:'PMH/Voucher',v83MS:'Office (MS365)',v83HSSV:'HS-SV',v83Trade:'Thu cũ đổi mới',v83Payment:'Thanh toán',v83Installment:'Trả góp'};
+      const labels={v83PMH:'PMH/Voucher',v83MS:'Office (MS365)',v83HSSV:'HS-SV',v83Trade:'Thu cũ đổi mới',v83Payment:'Thanh toán',v83Installment:'Trả góp',v83D0209:'Giảm 02/09',v83PMH9:'PMH T9'};
       const picked=Object.keys(labels).filter(id=>opt(id)).map(id=>labels[id]);
       const span=filterWrap.querySelector('span');
       const on=opt('v83OnlyMatched');
@@ -3816,6 +3825,865 @@ function promoFinalInfo(r){
     }).catch(()=>setSyncBadge('err'));
   }
 })();
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════
+   V9 — Gộp tính năng hay nhất từ CRM V39 vào BangGia Pro
+   • Bảng Giảm 02/09 (điện thoại / tablet / ebook + Laptop/LCD)
+   • PMH Tháng 9 theo phân khúc giá
+   • KPI + biểu đồ Chart.js (hãng, phân khúc)
+   • Bấm vào chip ưu đãi để bật/tắt từng khoản theo từng sản phẩm
+   • Lưu cấu hình map cột thủ công vào bộ nhớ
+═══════════════════════════════════════════════════════ */
+(function(){
+const el=id=>document.getElementById(id);
+const escH=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const money=n=>(Math.round(+n||0)).toLocaleString('vi-VN')+'đ';
+
+/* ── CSS ── */
+const css=document.createElement('style');
+css.textContent=`
+#promoStats{display:none!important}
+#v9Bi{margin:4px 0 12px}
+.v9-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin-bottom:12px}
+.v9-kpis .stat .sv{font-size:22px}
+.v9-kpis .stat .sh{font-size:9px;color:var(--t3);margin-top:2px}
+.v9-charts{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+@media(max-width:900px){.v9-charts{grid-template-columns:1fr}}
+.v9-chart{background:var(--bg2);border:1px solid var(--bd);border-radius:12px;padding:12px 14px}
+.v9-ct{font-size:12px;font-weight:800;color:var(--t0);margin-bottom:8px;display:flex;justify-content:space-between;gap:8px}
+.v9-ct span{font-size:10px;color:var(--t3);font-weight:600}
+.v9-cv{position:relative;height:250px}
+.v9-chip{cursor:pointer;user-select:none;transition:.15s}
+.v9-chip:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.v9-chip.off{background:var(--bg3)!important;color:var(--t3)!important;text-decoration:line-through}
+.v9-chiprow{margin-top:4px}
+.v9-hint{font-size:9px;color:var(--t3);margin-top:2px}
+`;
+document.head.appendChild(css);
+
+/* ── Bảng giảm 02/09 (nguyên bản từ V39) ── */
+const PHONE_PROMO_MAP={
+    "galaxy a07 5g 4-128": 290000,
+    "xiaomi redmi 15 (8+128g)": 290000,
+    "oppo a3 (8+128gb)": 290000,
+    "oppo a5 (6+128gb)": 290000,
+    "vivo y21d 4-128": 290000,
+    "note 14 8-128": 290000,
+    "nubia air 5g 8-256gb": 290000,
+    "galaxy a07 5g 6-128": 290000,
+    "galaxy a17 4-128": 290000,
+    "xiaomi redmi 15c (8+256g)": 290000,
+    "redmi 15 5g 128g": 290000,
+    "oppo a6c 4+128gb": 290000,
+    "note 15 6-128": 290000,
+    "vivo y05 4-128": 290000,
+    "xiaomi redmi 17 (4+128g)": 290000,
+    "note 14 8-256": 290000,
+    "galaxy a17 8-128": 290000,
+    "oppo a5 (8+128gb": 290000,
+    "vivo y21d 6-128": 290000,
+    "oppo a60 256gb": 290000,
+    "vivo y29 8-128gb": 290000,
+    "honor x7d 8-128gb": 290000,
+    "note 15 8-128": 290000,
+    "xiaomi redmi 17 5g (4+128g)": 290000,
+    "honor x7d 8-256": 290000,
+    "redmi 15 5g 256g": 290000,
+    "xiaomi redmi 17 (4+256g)": 290000,
+    "vivo y11d 4-128": 290000,
+    "oppo a5 pro 4g": 290000,
+    "galaxy a17 8-256": 290000,
+    "galaxy a26 6-128": 290000,
+    "vivo y21d 6-256": 290000,
+    "motorola moto g57 power (8+128gb)": 290000,
+    "oppo a6x 4+128gb": 290000,
+    "oppo a6t 4+128gb": 290000,
+    "galaxy a17 5g 8-128": 290000,
+    "motorola moto g86 power 5g (8+128gb)": 290000,
+    "note 15 8-256": 290000,
+    "vivo y11d 6-128": 290000,
+    "xiaomi redmi 17 5g (4+256g)": 290000,
+    "vivo y39 5g 8-128": 290000,
+    "note 15 5g 6-128": 290000,
+    "xiaomi poco m8 5g (8+256g)": 290000,
+    "xiaomi redmi 17 (6+256g)": 290000,
+    "honor x7d 5g 8-256": 290000,
+    "note 14 pro 256": 290000,
+    "galaxy a17 5g 8-256": 290000,
+    "vivo y31d 4-128": 290000,
+    "honor x8d 8-128gb": 290000,
+    "oppo a6 pro 8+128": 290000,
+    "note 15 5g 8-256": 290000,
+    "oppo a5 pro 5g": 290000,
+    "vivo v40 lite 8-256": 290000,
+    "vivo y39 5g 8-256": 290000,
+    "galaxy a26 8-256": 290000,
+    "galaxy a27 6-128": 290000,
+    "xiaomi poco m8 5g (8+512g)": 290000,
+    "honor 400 lite 5g 12-256": 290000,
+    "note 14 pro 12gb": 290000,
+    "oppo a6x 6+256gb": 290000,
+    "oppo a6t 6+256gb": 290000,
+    "vivo y31d 6-128": 290000,
+    "motorola edge fusion 60 (8+256gb)": 290000,
+    "note 15 pro 8-256": 290000,
+    "honor x8d 8-256gb": 290000,
+    "galaxy a36 8-256": 290000,
+    "galaxy a27 8-128": 290000,
+    "note 14 pro 5g": 290000,
+    "oppo reno13 f 5g 8+256gb": 290000,
+    "vivo v50 lite 5g 8-256": 290000,
+    "oppo a6 pro 8+256": 290000,
+    "xiaomi poco x7 pro (12+256g)": 290000,
+    "oppo a6 6+128": 290000,
+    "vivo y31d 8-128": 490000,
+    "note 15 pro 12-256": 490000,
+    "galaxy a37 6-128": 490000,
+    "vivo v60 lite 5g 8-256": 490000,
+    "note 15 pro 5g 8-256": 490000,
+    "galaxy a37 8-128": 490000,
+    "galaxy a56 8-256": 490000,
+    "note 14 pro+ 5g": 490000,
+    "note14pro 5g 12g": 490000,
+    "oppo a6 8+128": 290000,
+    "honor x9d 5g 8-256": 490000,
+    "oppo a6 pro 5g 8+256": 290000,
+    "xiaomi poco x8 pro (8+256g)": 490000,
+    "honor 600 lite 5g 8-256": 490000,
+    "tecno pova curve 2 5g 8-128": 490000,
+    "oppo reno14 f 5g 12+256gb": 290000,
+    "galaxy a37 8-256": 490000,
+    "poco x7 pro 12+512gb": 490000,
+    "xiaomi redmi note 15 pro 5g (12+256g)": 490000,
+    "oppo reno13 f 5g 12+512gb": 290000,
+    "oppo a6 pro 5g 12+256": 290000,
+    "honor x9d 5g 12-256": 490000,
+    "oppo reno15 f 5g 8+256": 290000,
+    "xiaomi poco x8 pro (8+512g)": 490000,
+    "motorola edge 70 fusion (8+128gb)": 490000,
+    "nothing phone (4a) (8+128gb)": 490000,
+    "oppo a6 8+256": 290000,
+    "note 15 pro 5g 12-512": 490000,
+    "galaxy a57 8-128": 490000,
+    "oppo reno14 f 5g 12+512gb": 290000,
+    "note14pro+5g 12g": 490000,
+    "vivo v60 lite 5g 12-512": 490000,
+    "note 15 pro+ 5g 12-256": 490000,
+    "oppo reno15 f 5g 12+256": 290000,
+    "xiaomi poco x8 pro (12+512g)": 490000,
+    "motorola edge 70 fusion (8+256gb)": 490000,
+    "nothing phone (4a) (8+256gb)": 490000,
+    "honor 400 5g 12-256": 490000,
+    "galaxy a57 8-256": 490000,
+    "xiaomi 15t 5g (12+256g)": 490000,
+    "motorola edge 70 (8+256gb)": 490000,
+    "vivo v70 fe 5g 8-256": 490000,
+    "nothing phone (4a) (12+256gb)": 490000,
+    "tecno pova curve 2 5g 12-256": 490000,
+    "galaxy a57 12-256": 490000,
+    "xiaomi 15t 5g (12+512g)": 490000,
+    "oppo reno16 f 5g 8+128": 290000,
+    "oppo reno13 5g 256gb": 290000,
+    "vivo v60 5g 12-256": 490000,
+    "oppo reno15 5g 8+256": 290000,
+    "vivo v70 fe 5g 12-256": 490000,
+    "oppo reno16 f 5g 8+256": 290000,
+    "nothing phone (4a) pro (12+256gb)": 490000,
+    "s25 fe 128gb": 490000,
+    "vivo v60 5g 12-512": 490000,
+    "vivo v70 5g 8-256": 490000,
+    "honor 600 5g 8-256": 490000,
+    "xiaomi 15t pro 5g (12+256g)": 490000,
+    "oppo reno15 pro 5g 12+256": 290000,
+    "oppo reno16 5g 8+256": 290000,
+    "xiaomi 15t pro 5g (12+512g)": 490000,
+    "s25 fe 256gb": 490000,
+    "poco f8 pro 12+512gb": 490000,
+    "motorola razr 60 (8+256gb)": 490000,
+    "oppo reno15 pro 5g 12+512": 290000,
+    "vivo v70 5g 12-256": 490000,
+    "xiaomi 17t (12+256g)": 690000,
+    "xiaomi 17t (12+512g)": 690000,
+    "find n3 flip 5g": 290000,
+    "ss s25 5g 256": 690000,
+    "motorola signature (12+256gb)": 690000,
+    "z flip7 fe 128": 690000,
+    "vivo x300 12-256": 690000,
+    "xiaomi 17t pro (12+256g)": 690000,
+    "oppo find x9s 12+256": 290000,
+    "xiaomi 17t pro (12+512g)": 690000,
+    "s25 fe 512gb": 990000,
+    "ss s26 5g 256": 990000,
+    "honor 600 pro 5g 12-256": 990000,
+    "oppo reno16 pro 5g 12+256": 290000,
+    "z flip7 fe 256": 990000,
+    "xiaomi 17 5g (12+256g)": 990000,
+    "oppo find x9s 12+512": 290000,
+    "xiaomi 17t pro (12+1tb)": 990000,
+    "honor 600 molly 5g 12-512gb": 990000,
+    "xiaomi 17 5g (12+512g)": 990000,
+    "z flip7 5g 256": 990000,
+    "s25 edge 5g 256": 990000,
+    "oppo find x8 pro": 290000,
+    "ss s26+ 5g 256": 990000,
+    "oppo find x9 16+512": 290000,
+    "ss s26 5g 512": 1990000,
+    "z flip8 5g 256": 1990000,
+    "s25 ultra 5g 256": 1990000,
+    "vivo x300 pro 16-512": 1990000,
+    "z flip7 5g 512": 1990000,
+    "s25 edge 5g 512": 1990000,
+    "ss s26+ 5g 512": 1990000,
+    "s26 ultra 5g 256": 1990000,
+    "z flip8 5g 512": 1990000,
+    "s25 ultra 5g 512": 1990000,
+    "xiaomi 17 ultra 5g (16+512g)": 1990000,
+    "s26 ultra 5g 512": 2900000,
+    "honor magic v5 16-512": 2900000,
+    "z fold7 5g 256": 2900000,
+    "z fold8 5g 256": 2900000,
+    "oppo find x9 ultra": 290000,
+    "vivo x300 ultra 16-512": 290000,
+    "motorola razr fold (12+256gb)": 2900000,
+    "s26 ultra 5g 1tb": 2900000,
+    "z fold7 5g 512": 2900000,
+    "z fold8 ultra 256": 2900000,
+    "z fold8 5g 512": 2900000,
+    "z fold8 ultra 512": 2900000,
+    "oppo find n6": 290000,
+    "z fold8 5g 1tb": 2900000,
+    "z fold8 ultra 1tb": 2900000,
+    "s26 fe 128gb": 490000,
+    "s26 fe 256gb": 690000,
+    "tab a11 4g 64gb": 290000,
+    "redmi pad 2 9.7 wifi (4+128g)": 290000,
+    "redmi pad 2 9.7 4g 4+64g)": 290000,
+    "redmi pad 2 9.7 4g (4+64g)": 290000,
+    "xiaomi redmi pad 2 wifi (4+128g)": 290000,
+    "tab a11 wifi 128gb": 290000,
+    "redmi pad 2 9.7 4g (4+128g)": 290000,
+    "oppo pad neo wifi (6+128gb)": 290000,
+    "lenovo idea tab (4+128gb)": 290000,
+    "xiaomi redmi pad 2 wifi (4+256g)": 290000,
+    "xiaomi redmi pad 2 4g (4+128g)": 290000,
+    "oppo pad se wifi (4gb/128gb)": 290000,
+    "tab a11 4g 128gb": 290000,
+    "oppo pad se wifi (4gb/128gb) màn hình nhám": 290000,
+    "honor pad x8b wifi (6+128gb)": 290000,
+    "lenovo idea tab wifi (8+128gb)": 290000,
+    "tab a11+ wifi 128gb": 290000,
+    "xiaomi redmi pad 2 wifi (8+256g)": 290000,
+    "oppo pad neo 4g (8+128gb)": 290000,
+    "xiaomi redmi pad 2 pro wifi (6+128g)": 290000,
+    "oppo pad se 4g (4gb/128gb)": 290000,
+    "honor pad x9a (8+256gb)": 290000,
+    "lenovo idea tab 5g (8+128gb)": 290000,
+    "tab a11+ 5g 128gb": 290000,
+    "tab a11+ wifi 256gb": 290000,
+    "xiaomi redmi pad 2 pro 5g (6+128g)": 290000,
+    "tab s10 lite wifi 128gb": 290000,
+    "oppo pad se 4g (8gb/256gb)": 290000,
+    "xiaomi redmi pad 2 pro wifi (8+256g)": 490000,
+    "tab a11+ 5g 256gb": 490000,
+    "lenovo idea tab plus (8+256)": 290000,
+    "tab s10 lite 5g 128gb": 490000,
+    "oppo pad 3 (8+256gb)": 290000,
+    "xiaomi pad 8 (8+128g)": 490000,
+    "tab s10 lite wifi 256gb": 490000,
+    "lenovo idea tab plus (12+256)": 290000,
+    "xiaomi pad 8 (8+256g)": 490000,
+    "tab s10 fe wifi 128gb": 490000,
+    "oppo pad 5 wifi (8gb/256gb)": 290000,
+    "lenovo legion tab gen 3 wifi (12+256)": 290000,
+    "tab s10 fe 5g 128gb": 490000,
+    "tab s10 fe wifi 256gb": 490000,
+    "xiaomi pad 8 pro (8+128g)": 490000,
+    "tab s10 fe+ wifi 128gb": 490000,
+    "xiaomi pad 8 pro (8+256g)": 490000,
+    "lenovo yoga tab wifi (8+256)": 290000,
+    "lenovo idea tab pro gen 2 (12+256)": 290000,
+    "tab s10 fe 5g 256gb": 490000,
+    "lenovo idea tab pro gen 2 (12+512)": 290000,
+    "tab s10 fe+ wifi 256gb": 690000,
+    "tab s11 wifi 128gb": 690000,
+    "lenovo legion tab gen 5 wifi (12+256)": 290000,
+    "tab s11 wifi 256gb": 690000,
+    "tab s11 5g 128gb": 990000,
+    "tab s10+ wifi 256gb": 990000,
+    "tab s11 5g 256gb": 990000,
+    "tab s10+ 5g 256gb": 1990000,
+    "tab s11 ultra 5g 256gb": 1990000,
+    "tab s11 ultra 5g 1tb": 2900000,
+    "realme c100i (4-64gb)": 290000,
+    "realme c100i (4-128gb)": 290000,
+    "realme c100x (4-128gb)": 290000,
+    "realme c100x (6-128gb)": 290000,
+    "realme c100 (6-128gb)": 290000,
+    "realme c100 (8-128gb)": 290000,
+    "realme c100 (8-256gb)": 290000,
+    "realme 16t 5g (8-128gb)": 490000,
+    "realme 16t 5g (8-256gb)": 490000,
+    "realme 16 5g (8-256gb)": 490000,
+    "realme p4 power 5g (12-256gb)": 490000,
+    "realme c85 (6-128gb)": 290000,
+    "realme c85 (8-128gb)": 290000,
+    "realme c85 5g (8-128gb)": 290000,
+    "realme c85 5g (8-256gb)": 290000,
+    "realme c85 pro (8-128gb)": 290000,
+    "realme c85 pro (8-256gb)": 290000,
+    "realme 15t (8-256gb)": 290000,
+    "realme 15 5g (8-256gb)": 490000,
+    "realme 16 5g (12-256gb)": 490000,
+    "realme 16 pro 5g (12-256gb)": 490000,
+    "combo boox savi 6 32gb - màu trắng": 290000,
+    "amazon kindle paperwhite 6 - 16gb - cqc": 290000,
+    "amazon kindle paperwhite 6 - 16gb - kqc": 290000,
+    "boox go 6": 290000,
+    "amazon kindle paperwhite 6 - 32gb - kqc": 290000,
+    "boox go 7": 290000,
+    "boox palma2 - màu đen": 290000,
+    "boox go 7 color (gen ii)": 290000,
+    "kindle colorsoft 16gb - kqc": 290000,
+    "kindle colorsoft 32gb signature": 290000,
+    "boox go 10.3 (gen ii)": 490000,
+    "boox go 10.3 (gen ii) lumi": 490000,
+    "boox note air 5 c": 490000,
+    "boox note max": 490000,
+    "boox tab x c": 490000,
+};
+const PHONE_KEYS=Object.keys(PHONE_PROMO_MAP).sort((a,b)=>b.length-a.length); // khớp khoá dài nhất trước, tránh nhầm model
+const norm=s=>String(s||'').toLowerCase().replace(/\s+/g,' ').trim();
+const isLaptop=n=>/laptop|macbook|thinkpad|\bpc\b/.test(n);
+const isLcd=n=>/màn hình|lcd|máy in/.test(n);
+const memo=new Map();
+function calc0209(name,price){
+  const n=norm(name); if(!n)return 0;
+  const k=n+'|'+(isLaptop(n)?Math.round(price||0):0);
+  if(memo.has(k))return memo.get(k);
+  let v=0;
+  for(const key of PHONE_KEYS){ if(n.includes(key)){v=PHONE_PROMO_MAP[key];break;} }
+  if(!v){
+    if(isLaptop(n)) v=price<20e6?590000:price<30e6?1190000:2900000;
+    else if(isLcd(n)) v=290000;
+  }
+  memo.set(k,v); return v;
+}
+/* ── PMH Tháng 9 (nguyên bản từ V39) ── */
+function calcPMH9(name,brand,price){
+  const n=norm(name), b=norm(brand); price=+price||0;
+  if(price<=0)return 0;
+  if(/z fold7|z fold8|find n6|razr fold/.test(n))return 3000000;
+  if(/z flip7 fe|z flip8|razr 60/.test(n))return 2000000;
+  if(n.includes('s26 fe'))return 1000000;
+  if(n.includes('honor 600 lite'))return 500000;
+  if(b.includes('motorola')&&price>=10e6)return 2000000;
+  if(price<5e6)return 50000;
+  if(price<10e6)return 100000;
+  if(price<20e6)return 200000;
+  if(price<30e6)return 300000;
+  return 500000;
+}
+/* v7 gọi hàm này trong smartFinalInfo() để cộng thêm 2 khoản giảm vào danh sách ưu đãi */
+window.v9ExtraDeductions=function(r,price){
+  const out=[]; const nm=r?.name||'';
+  const a=calc0209(nm,price); if(a>0)out.push({key:'d0209',label:'Giảm 02/09',amount:a,source:'map 02/09',confidence:'safe'});
+  const b=calcPMH9(nm,r?.brand||'',price); if(b>0)out.push({key:'pmh9',label:'PMH T9',amount:b,source:'PMH tháng 9',confidence:'safe'});
+  return out;
+};
+window.v9Calc0209=calc0209; window.v9CalcPMH9=calcPMH9;
+
+/* ── Bật/tắt từng khoản ưu đãi trên từng sản phẩm ── */
+window._v9Excl=new Set();
+window.v9ToggleItem=function(ma,key){
+  const k=ma+'|'+key;
+  if(window._v9Excl.has(k))window._v9Excl.delete(k);else window._v9Excl.add(k);
+  window.renderPromoTbl();
+  if(window.renderPromoChart)window.renderPromoChart();
+};
+function decorateRows(){
+  const rows=window.getPromoFiltered().slice(0,300);
+  document.querySelectorAll('#promoBody tr').forEach((tr,i)=>{
+    const r=rows[i]; if(!r)return;
+    const act=r.smartItems||[], skp=r.smartSkipped||[];
+    if(!act.length&&!skp.length)return;
+    const pc=tr.children[5]; if(!pc)return;
+    tr.querySelectorAll('.smart-deduct').forEach(e=>{if(!e.classList.contains('v9-chip'))e.remove();});
+    pc.querySelectorAll('.v9-chiprow').forEach(e=>e.remove());
+    const chip=(x,off)=>`<span class="smart-deduct v9-chip ${off?'off':''}" title="${off?'Bấm để tính lại khoản này':'Bấm để bỏ khoản này khỏi giá cuối'}" onclick="v9ToggleItem('${escH(r.ma)}','${x.key}')">${escH(x.label)} -${money(x.amount)}</span>`;
+    const div=document.createElement('div'); div.className='v9-chiprow';
+    div.innerHTML=act.map(x=>chip(x,false)).join('')+skp.map(x=>chip(x,true)).join('')+'<div class="v9-hint">bấm chip để bật/tắt</div>';
+    pc.appendChild(div);
+  });
+}
+
+/* ── KPI + biểu đồ ── */
+const SEGS=[
+  {n:'Dưới 5 triệu',lo:0,hi:5e6},{n:'5 - 10 triệu',lo:5e6,hi:1e7},{n:'10 - 15 triệu',lo:1e7,hi:15e6},
+  {n:'15 - 20 triệu',lo:15e6,hi:2e7},{n:'20 - 30 triệu',lo:2e7,hi:3e7},{n:'30 - 50 triệu',lo:3e7,hi:5e7},{n:'Trên 50 triệu',lo:5e7,hi:1e12}
+];
+let barChart=null,donutChart=null;
+function installBi(){
+  if(el('v9Bi'))return;
+  const st=el('promoStats'); if(!st)return;
+  const box=document.createElement('div'); box.id='v9Bi';
+  box.innerHTML=`<div class="v9-kpis" id="v9Kpis"></div>
+  <div class="v9-charts">
+    <div class="v9-chart"><div class="v9-ct">📊 Số deal theo hãng <span>top 8 · theo bộ lọc hiện tại</span></div><div class="v9-cv"><canvas id="v9BarBrand"></canvas></div></div>
+    <div class="v9-chart"><div class="v9-ct">🍩 Tỷ trọng theo phân khúc giá gốc</div><div class="v9-cv"><canvas id="v9DonutSeg"></canvas></div></div>
+  </div>`;
+  st.parentElement.insertBefore(box,st.nextSibling);
+}
+function renderBi(){
+  installBi();
+  const k=el('v9Kpis'); if(!k)return;
+  const rows=window.getPromoFiltered();
+  const total=rows.length;
+  const brands=new Set(rows.map(r=>r.brand)).size;
+  const maxPct=rows.reduce((m,r)=>Math.max(m,r.pctPromo||0),0);
+  const maxSave=rows.reduce((m,r)=>Math.max(m,r.save||0),0);
+  const nFinal=rows.filter(r=>r.finalApplied).length;
+  const n0209=rows.filter(r=>calc0209(r.name,r.basePricePromo||r.pricePromo)>0).length;
+  const nP9=rows.filter(r=>calcPMH9(r.name,r.brand,r.basePricePromo||r.pricePromo)>0).length;
+  const card=(v,l,c,h)=>`<div class="stat"><div class="sv ${c}">${v}</div><div class="sl">${l}</div>${h?`<div class="sh">${h}</div>`:''}</div>`;
+  k.innerHTML=card(total,'Deal sau lọc','cb')+card(brands,'Hãng có deal','cp')+
+    card(maxPct?(maxPct*100).toFixed(0)+'%':'—','Giảm sâu nhất','cg')+
+    card(maxSave?fmtP(maxSave):'—','Tiết kiệm cao nhất','cg')+
+    card(nFinal,'Đã trừ ưu đãi','ca','vào giá cuối')+
+    card(n0209,'Có giảm 02/09','cb','tick ở Giá Cuối')+
+    card(nP9,'Có PMH tháng 9','cr','tick ở Giá Cuối');
+  if(typeof Chart==='undefined')return;
+  const app=el('app'), cs=getComputedStyle(app);
+  const tc=cs.getPropertyValue('--t2').trim()||'#999', gc=cs.getPropertyValue('--bd').trim()||'#333', ac=cs.getPropertyValue('--ac').trim()||'#4f8ef7';
+  Chart.defaults.color=tc; Chart.defaults.borderColor=gc;
+  const bc={}; rows.forEach(r=>{bc[r.brand]=(bc[r.brand]||0)+1;});
+  const top=Object.entries(bc).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  if(barChart)barChart.destroy();
+  const c1=el('v9BarBrand');
+  if(c1)barChart=new Chart(c1.getContext('2d'),{type:'bar',data:{labels:top.map(x=>x[0]),datasets:[{label:'Số deal',data:top.map(x=>x[1]),backgroundColor:ac,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+  const sc=SEGS.map(s=>rows.filter(r=>(r.gg||0)>=s.lo&&(r.gg||0)<s.hi).length);
+  const idx=sc.map((v,i)=>i).filter(i=>sc[i]>0);
+  if(donutChart)donutChart.destroy();
+  const c2=el('v9DonutSeg');
+  if(c2)donutChart=new Chart(c2.getContext('2d'),{type:'doughnut',data:{labels:idx.map(i=>SEGS[i].n),datasets:[{data:idx.map(i=>sc[i]),backgroundColor:['#2563eb','#7c3aed','#059669','#d97706','#db2777','#0891b2','#64748b'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}}}}});
+}
+
+/* ── Gắn vào luồng render của v7 ── */
+const _rpt=window.renderPromoTbl;
+window.renderPromoTbl=function(){
+  _rpt.apply(this,arguments);
+  try{decorateRows();renderBi();}catch(e){console.error('V9 render lỗi',e);}
+};
+const _dp=window.doPromo;
+window.doPromo=function(){ window._v9Excl.clear(); return _dp.apply(this,arguments); };
+const _st=window.setTheme;
+window.setTheme=function(){ _st.apply(this,arguments); setTimeout(()=>{try{if(window.promoRows&&promoRows.length)renderBi();}catch(e){}},30); };
+
+/* ── Lưu cấu hình map cột thủ công ── */
+const _bmg=window.buildMapGrid;
+function mapKey(){return 'bgp_mapcols_'+(typeof tplName!=='undefined'?tplName:'x');}
+window.buildMapGrid=function(cols){
+  _bmg.apply(this,arguments);
+  try{
+    const s=JSON.parse(localStorage.getItem(mapKey())||'null');
+    if(s)Object.keys(s).forEach(k=>{
+      const sel=document.querySelector(`.mrow-sel[data-k="${k}"]`);
+      if(sel&&s[k]<cols){sel.value=String(s[k]);mapCols[k]=s[k];}
+    });
+  }catch(e){}
+};
+window.v9SaveMap=function(){
+  try{localStorage.setItem(mapKey(),JSON.stringify(mapCols));toast('💾 Đã lưu cấu hình cột cho '+tplName);}
+  catch(e){toast('Không lưu được cấu hình cột',false);}
+};
+const irow=document.querySelector('#mapperWrap .irow');
+if(irow){
+  const b=document.createElement('button');
+  b.className='btn btn-gn btn-sm'; b.style.marginLeft='auto'; b.textContent='💾 Lưu cấu hình cột';
+  b.onclick=window.v9SaveMap; irow.appendChild(b);
+}
+})();
+
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════
+   V9.1 — Tab "Tổng hợp PMH": khai thác khuyến mãi có tặng PMH
+   • Tự đọc cột khuyến mãi của file giá đã tải lên
+   • Tổng hợp chi tiết theo loại PMH / trạng thái quy đổi / mệnh giá / hãng
+   • Lọc danh sách sản phẩm có PMH, xuất Excel, copy gửi nhân viên
+═══════════════════════════════════════════════════════ */
+(function(){
+const el=id=>document.getElementById(id);
+const E=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d');
+const money=n=>(Math.round(+n||0)).toLocaleString('vi-VN')+'đ';
+const short=n=>{n=+n||0;return n>=1e6?(n/1e6).toFixed(n%1e6?1:0).replace('.0','')+'tr':n>=1e3?Math.round(n/1e3)+'k':String(n);};
+
+const ST={cash:'Được quy đổi / giảm tiền',no:'Không quy đổi',gift:'Chỉ tặng (chưa ghi quy đổi)'};
+const STC={cash:'bg-g',no:'bg-r',gift:'bg-a'};
+const HAS_PMH=/(pmh|phieu mua hang|voucher|coupon|e-voucher)/;
+const UNIT='(?:(tr|trieu|k|nghin)(?![a-z]))?';
+const FACE_RE=new RegExp('(?:tri gia|menh gia|gia tri|pmh|phieu mua hang|voucher|coupon)[^0-9]{0,40}(\\d+(?:[.,]\\d+)*)\\s*'+UNIT);
+const CASH_RE=new RegExp('(?:giam ngay|giam|tru|quy doi|qui doi|can tru|tien mat)[^0-9]{0,40}(\\d+(?:[.,]\\d+)*)\\s*'+UNIT);
+const NO_RE=/(khong\s+(duoc\s+)?(quy|qui)\s*doi|khong\s+(duoc\s+)?giam\s*tien|khong\s+tru|khong\s+ap\s+dung\s+(quy|giam)|chi\s+tang)/;
+const OK_RE=/(quy\s*doi|qui\s*doi|giam\s*tien|tru\s*tien|can\s*tru|tien\s*mat|giam\s*truc\s*tiep|hoac)/;
+const TAGS=[
+  ['Trả góp',/(tra gop|tra cham|0%|home credit|fe credit|mcredit)/],
+  ['Thanh toán',/(vnpay|momo|zalopay|visa|mastercard|the tin dung|ngan hang|qr)/],
+  ['Thu cũ đổi mới',/(thu cu|doi cu|len doi|trade)/],
+  ['HS-SV',/(hssv|hs-sv|hoc sinh|sinh vien)/],
+  ['Mua kèm',/(mua kem|mua cung|kem theo|combo)/],
+  ['Thành viên',/(smember|thanh vien|s-student|s-teacher)/],
+  ['Có thời hạn',/(tu ngay|den ngay|\d{1,2}\/\d{1,2})/]
+];
+const mny=(m)=>m?promoMoneyToNumber(m[1],m[2]):0;
+
+/* ── Bóc tách 1 dòng khuyến mãi → thông tin PMH ── */
+function parseChunk(raw){
+  const n=norm(raw);
+  if(!HAS_PMH.test(n))return null;
+  if(/khong\s+(co|tang|kem)\s+(pmh|phieu|voucher|coupon)/.test(n))return null;
+  const hoac=/(^|\s)hoac(\s|$)/.test(n);
+  let face=0, alt=0;
+  if(hoac){
+    // "Giảm X hoặc tặng PMH Y" (hoặc đảo ngược): vế có PMH → mệnh giá, vế còn lại → mức giảm tiền thay thế
+    n.split(/(?:^|\s)hoac(?:\s|$)/).forEach(part=>{
+      if(HAS_PMH.test(part)){ if(!face)face=mny(FACE_RE.exec(part)); }
+      else if(!alt)alt=mny(CASH_RE.exec(part));
+    });
+    if(!face)face=mny(FACE_RE.exec(n));
+  }else face=mny(FACE_RE.exec(n));
+  if(face>0&&face<1000)face=0;
+  if(alt>0&&alt<1000)alt=0;
+  let status=NO_RE.test(n)?'no':OK_RE.test(n)?'cash':'gift';
+  let cashVal=0;
+  if(status==='cash'){
+    if(hoac&&alt>0&&face>0&&alt!==face)cashVal=Math.min(alt,face);
+    else cashVal=face||alt||0;
+  }
+  const tags=TAGS.filter(t=>t[1].test(n)).map(t=>t[0]);
+  const clean=String(raw).replace(/^[\-\*\u2022\d\.\)\s]+/,'').replace(/\s+/g,' ').trim();
+  const label=clean.replace(/\d+(?:[.,]\d+)*\s*(?:triệu|trieu|tr|k|nghìn|nghin|đ|vnd)?(?![a-zà-ỹ])/gi,'▢').slice(0,150);
+  return {raw:clean,label,amount:face||alt||0,status,cashVal,tags,hoac};
+}
+function parseKm(km){
+  const txt=String(km||'').replace(/_x000a_/gi,'\n').replace(/\r/g,'');
+  const rawChunks=txt.split(/[\n;•|]+/).map(s=>s.trim()).filter(Boolean);
+  const chunks=(typeof mergeHoacChunks==='function'?mergeHoacChunks(rawChunks):rawChunks);
+  const merged=[];
+  for(const c of chunks){
+    const n=norm(c);
+    // dòng ghi chú phụ ngay sau dòng PMH (vd "Không được quy đổi") → gộp vào dòng PMH trước đó
+    if(merged.length&&!HAS_PMH.test(n)&&!/\d/.test(n)&&/(quy doi|qui doi|giam tien|khong duoc|chi tang|khong ap dung)/.test(n)&&HAS_PMH.test(norm(merged[merged.length-1]))){
+      merged[merged.length-1]+=' '+c;
+    }else merged.push(c);
+  }
+  return merged.map(parseChunk).filter(Boolean);
+}
+
+/* ── Trạng thái ── */
+const S={prods:[],totalParsed:0,patterns:[],f:{brand:'',status:'',min:0,tag:'',pattern:'',q:'',sort:'total'},src:''};
+
+function analyze(){
+  const side=el('v9PmhSide')?.value||'auto';
+  const data=side==='N'?rawN:side==='M'?rawM:(rawM||rawN);
+  S.prods=[];S.totalParsed=0;S.f.pattern='';
+  if(!data){S.src='';render();return;}
+  let parsed;
+  try{parsed=manualMode?parseManual(data):parseAuto(data,tplFmt);}
+  catch(e){console.error(e);toast('Lỗi đọc file cho tab PMH: '+e.message,false);render();return;}
+  const list=Object.values(parsed);
+  S.totalParsed=list.length;
+  S.src=(side==='N'||(side==='auto'&&!rawM))?'file ngày cũ (N)':'file ngày mới (M)';
+  list.forEach(r=>{
+    const pm=parseKm(r.km);
+    if(!pm.length)return;
+    const price=(r.gi&&r.gg&&r.gi<r.gg)?r.gi:(r.gg||r.gi||0);
+    const total=pm.reduce((s,x)=>s+(x.amount||0),0);
+    let cash=pm.reduce((s,x)=>s+(x.cashVal||0),0);
+    if(price&&cash>=price)cash=Math.max(0,price-1000);
+    const tags=new Set();pm.forEach(x=>x.tags.forEach(t=>tags.add(t)));
+    S.prods.push({ma:r.ma,name:r.name,brand:r.brand||'Khác',price,km:r.km||'',pmh:pm,total,cash,after:price?price-cash:0,
+      statuses:new Set(pm.map(x=>x.status)),tags,patterns:new Set(pm.map(x=>x.label))});
+  });
+  buildPatterns();
+  render();
+}
+function buildPatterns(){
+  const map=new Map();
+  S.prods.forEach(p=>p.pmh.forEach(x=>{
+    let g=map.get(x.label);
+    if(!g){g={label:x.label,example:x.raw,status:x.status,statusSet:new Set(),prods:new Set(),brands:new Set(),min:Infinity,max:0,tags:new Set(),ex:p.name};map.set(x.label,g);}
+    g.statusSet.add(x.status);g.prods.add(p.ma);g.brands.add(p.brand);
+    if(x.amount>0){g.min=Math.min(g.min,x.amount);g.max=Math.max(g.max,x.amount);}
+    x.tags.forEach(t=>g.tags.add(t));
+  }));
+  S.patterns=[...map.values()].sort((a,b)=>b.prods.size-a.prods.size||b.max-a.max);
+}
+function filtered(){
+  const f=S.f,q=norm(f.q).trim();
+  let rows=S.prods.filter(p=>{
+    if(f.brand&&p.brand!==f.brand)return false;
+    if(f.status&&!p.statuses.has(f.status))return false;
+    if(f.tag&&!p.tags.has(f.tag))return false;
+    if(f.pattern&&!p.patterns.has(f.pattern))return false;
+    if(f.min&&p.total<f.min)return false;
+    if(q&&!(norm(p.name).includes(q)||p.ma.includes(q)||norm(p.km).includes(q)))return false;
+    return true;
+  });
+  rows=[...rows];
+  if(f.sort==='after')rows.sort((a,b)=>(a.after||1e15)-(b.after||1e15));
+  else if(f.sort==='brand')rows.sort((a,b)=>a.brand.localeCompare(b.brand,'vi')||b.total-a.total);
+  else if(f.sort==='price')rows.sort((a,b)=>b.price-a.price);
+  else rows.sort((a,b)=>b.total-a.total||b.cash-a.cash);
+  return rows;
+}
+
+/* ── Giao diện ── */
+function build(){
+  const tabs=document.querySelector('.maintabs'), cat=el('tabCatalog');
+  if(!tabs||!cat||el('tabPMH'))return;
+  const btn=document.createElement('button');
+  btn.className='mtab';btn.id='mtBtnPMH';
+  btn.innerHTML='🎟️ Tổng hợp PMH<span class="mtab-badge" id="mtPmhBadge">0</span>';
+  btn.onclick=()=>switchMainTab('pmh');
+  tabs.appendChild(btn);
+  const css=document.createElement('style');
+  css.textContent=`
+  .pm-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+  .pm-kpis .stat .sv{font-size:22px}.pm-kpis .stat .sh{font-size:9px;color:var(--t3);margin-top:2px}
+  .pm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px}
+  .pm-box{background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px}
+  .pm-box h4{font-size:12px;margin-bottom:8px;color:var(--t0)}
+  .pm-box table{font-size:11px}
+  .pm-row{cursor:pointer}.pm-row.on td{background:color-mix(in srgb,var(--ac) 14%,var(--bg1))!important}
+  .pm-chip{display:inline-block;border-radius:999px;background:color-mix(in srgb,var(--pu) 16%,transparent);color:var(--pu);font-size:10px;font-weight:800;padding:2px 8px;margin:1px 3px 1px 0;white-space:nowrap}
+  .pm-chip.cash{background:color-mix(in srgb,var(--gn) 16%,transparent);color:var(--gn)}
+  .pm-chip.no{background:color-mix(in srgb,var(--rd) 16%,transparent);color:var(--rd)}
+  .pm-chip.gift{background:color-mix(in srgb,var(--am) 18%,transparent);color:var(--am)}
+  .pm-tag{font-size:9px;background:var(--bg3);color:var(--t2);border-radius:4px;padding:1px 6px;margin-right:3px;white-space:nowrap}
+  .pm-note{font-size:11px;color:var(--t2);line-height:1.5}
+  `;
+  document.head.appendChild(css);
+  const host=document.createElement('div');
+  host.id='tabPMH';host.className='hid';
+  host.innerHTML=`
+  <div class="card"><div class="card-head">
+    <span style="font-size:15px">🎟️</span><span class="sec-t">Tổng hợp khuyến mãi tặng PMH</span>
+    <span id="pmBadge" style="font-size:10px;color:var(--t2);background:var(--bg3);padding:2px 8px;border-radius:20px;margin-left:6px"></span>
+    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <select class="msel" id="v9PmhSide" onchange="v9Pmh.analyze()"><option value="auto">Nguồn: file mới (M), nếu thiếu dùng N</option><option value="M">Chỉ file mới (M)</option><option value="N">Chỉ file cũ (N)</option></select>
+      <button class="btn btn-ghost btn-sm" onclick="v9Pmh.analyze()">🔄 Phân tích lại</button>
+      <button class="btn btn-ghost btn-sm" onclick="toggleCard('pmBody',this)">▲ Ẩn</button>
+    </div></div>
+    <div class="card-body" id="pmBody"><div id="pmEmpty" class="hempty"></div><div id="pmSummary"></div></div></div>
+  <div class="card" id="pmListCard"><div class="card-head">
+    <span style="font-size:15px">📋</span><span class="sec-t">Danh sách sản phẩm có PMH</span>
+    <span id="pmListBadge" style="font-size:10px;color:var(--t2);background:var(--bg3);padding:2px 8px;border-radius:20px;margin-left:6px"></span>
+    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-gn btn-sm" onclick="v9Pmh.copy()">📋 Copy gửi NV</button>
+      <button class="btn btn-ac btn-sm" onclick="v9Pmh.xlsx()">📊 Xuất Excel</button>
+    </div></div>
+    <div class="card-body">
+      <div id="pmPatBanner" style="display:none;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px"></div>
+      <div class="ctrlbar">
+        <select class="msel" id="pmBrand" onchange="v9Pmh.set('brand',this.value)"><option value="">Tất cả hãng</option></select>
+        <select class="msel" id="pmStatus" onchange="v9Pmh.set('status',this.value)"><option value="">Mọi trạng thái PMH</option><option value="cash">${ST.cash}</option><option value="gift">${ST.gift}</option><option value="no">${ST.no}</option></select>
+        <select class="msel" id="pmMin" onchange="v9Pmh.set('min',+this.value)"><option value="0">Mệnh giá: tất cả</option><option value="100000">≥ 100K</option><option value="200000">≥ 200K</option><option value="500000">≥ 500K</option><option value="1000000">≥ 1 triệu</option><option value="2000000">≥ 2 triệu</option><option value="5000000">≥ 5 triệu</option></select>
+        <select class="msel" id="pmTag" onchange="v9Pmh.set('tag',this.value)"><option value="">Mọi điều kiện</option>${TAGS.map(t=>`<option>${t[0]}</option>`).join('')}</select>
+        <select class="msel" id="pmSort" onchange="v9Pmh.set('sort',this.value)"><option value="total">Xếp: tổng PMH cao</option><option value="after">Xếp: giá sau trừ PMH thấp</option><option value="price">Xếp: giá bán cao</option><option value="brand">Xếp: theo hãng</option></select>
+        <input class="sinp" id="pmQ" placeholder="🔍 Tên / mã SP / nội dung KM..." oninput="v9Pmh.set('q',this.value)">
+        <button class="btn btn-ghost btn-sm" onclick="v9Pmh.reset()">↺ Reset lọc</button>
+        <span class="rcnt" id="pmRcnt"></span>
+      </div>
+      <div class="tbl-wrap" style="max-height:560px"><table>
+        <thead><tr><th style="min-width:40px">STT</th><th style="min-width:115px">Mã SP</th><th style="min-width:230px">Tên sản phẩm</th><th style="min-width:75px">Hãng</th>
+        <th style="min-width:105px;text-align:right">Giá bán</th><th style="min-width:300px">PMH chi tiết</th><th style="min-width:105px;text-align:right">Tổng PMH</th>
+        <th style="min-width:110px;text-align:right">Trừ được vào giá</th><th style="min-width:110px;text-align:right">Giá sau trừ PMH</th><th style="min-width:130px">Điều kiện</th></tr></thead>
+        <tbody id="pmBody2"></tbody></table></div>
+      <div class="pm-note" style="margin-top:8px">“Trừ được vào giá” chỉ tính PMH có ghi quy đổi / giảm tiền (dòng “hoặc” lấy phương án thấp hơn). PMH ghi “không quy đổi” hoặc chỉ tặng thì không bị trừ.</div>
+    </div></div>`;
+  cat.after(host);
+}
+
+function setBadge(){
+  const b=el('mtPmhBadge');if(b)b.textContent=S.prods.length;
+}
+function render(){
+  setBadge();
+  const empty=el('pmEmpty'),sum=el('pmSummary');
+  if(!empty||!sum)return;
+  if(!S.src){
+    empty.style.display='';empty.innerHTML='Chưa có file giá.<br>Tải file ở tab <strong>⚡ So sánh giá</strong> — tab này sẽ tự phân tích ngay khi file được đọc xong.';
+    sum.innerHTML='';el('pmBadge').textContent='';renderList();return;
+  }
+  if(!S.prods.length){
+    empty.style.display='';empty.innerHTML=`Đã đọc ${S.totalParsed} sản phẩm (${E(S.src)}) nhưng không thấy dòng khuyến mãi nào có PMH / voucher.<br>Nếu file có PMH, hãy kiểm tra cột “Ghi chú / KM” (bật 🔧 Chỉnh cột thủ công) rồi bấm 🔄 Phân tích lại.`;
+    sum.innerHTML='';el('pmBadge').textContent='';renderList();return;
+  }
+  empty.style.display='none';
+  el('pmBadge').textContent=`${S.prods.length}/${S.totalParsed} SP có PMH · ${E(S.src)}`;
+  const entries=S.prods.reduce((s,p)=>s+p.pmh.length,0);
+  const totalVal=S.prods.reduce((s,p)=>s+p.total,0);
+  const nCash=S.prods.filter(p=>p.statuses.has('cash')).length;
+  const nNo=S.prods.filter(p=>p.statuses.has('no')).length;
+  const nGift=S.prods.filter(p=>p.statuses.has('gift')).length;
+  const maxV=S.prods.reduce((m,p)=>Math.max(m,p.total),0);
+  const card=(v,l,c,h)=>`<div class="stat"><div class="sv ${c}">${v}</div><div class="sl">${l}</div>${h?`<div class="sh">${h}</div>`:''}</div>`;
+  const kpis=`<div class="pm-kpis">`+
+    card(S.prods.length,'SP có tặng PMH','cb',(S.prods.length/S.totalParsed*100).toFixed(1)+'% tổng '+S.totalParsed+' SP')+
+    card(S.patterns.length,'Loại PMH khác nhau','cp',entries+' dòng khuyến mãi')+
+    card(short(totalVal/S.prods.length),'Giá trị PMH TB / SP','ca','cao nhất '+short(maxV))+
+    card(nCash,'SP PMH quy đổi được','cg','trừ được vào giá')+
+    card(nNo,'SP PMH không quy đổi','cr','')+
+    card(nGift,'SP PMH chưa rõ quy đổi','ca','chỉ ghi tặng')+`</div>`;
+  const f=S.f;
+  // theo trạng thái
+  const stRows=['cash','gift','no'].map(k=>{
+    const ps=S.prods.filter(p=>p.statuses.has(k));
+    return `<tr class="pm-row ${f.status===k?'on':''}" onclick="v9Pmh.set('status','${f.status===k?'':k}')"><td><span class="badge ${STC[k]}">${ST[k]}</span></td><td class="nr">${ps.length}</td><td class="nr">${money(ps.reduce((s,p)=>s+p.total,0)/(ps.length||1))}</td></tr>`;
+  }).join('');
+  // theo mệnh giá
+  const am=new Map();
+  S.prods.forEach(p=>{new Set(p.pmh.map(x=>x.amount)).forEach(a=>{am.set(a,(am.get(a)||0)+1);});});
+  const amRows=[...am.entries()].sort((a,b)=>b[1]-a[1]).slice(0,25).map(([a,c])=>`<tr class="pm-row ${f.min===a?'on':''}" onclick="v9Pmh.set('min',${f.min===a?0:a})"><td>${a?money(a):'Chưa rõ giá trị'}</td><td class="nr">${c}</td><td class="nr">${(c/S.prods.length*100).toFixed(0)}%</td></tr>`).join('');
+  // theo hãng
+  const bm=new Map();
+  S.prods.forEach(p=>{const b=bm.get(p.brand)||{n:0,v:0};b.n++;b.v+=p.total;bm.set(p.brand,b);});
+  const bRows=[...bm.entries()].sort((a,b)=>b[1].n-a[1].n).map(([b,d])=>`<tr class="pm-row ${f.brand===b?'on':''}" onclick="v9Pmh.set('brand','${f.brand===b?'':E(b).replace(/'/g,"\\'")}')"><td>${E(b)}</td><td class="nr">${d.n}</td><td class="nr">${money(d.v/d.n)}</td></tr>`).join('');
+  // theo loại PMH (chi tiết)
+  const pRows=S.patterns.slice(0,120).map((g,i)=>{
+    const sts=[...g.statusSet].map(k=>`<span class="badge ${STC[k]}">${ST[k]}</span>`).join(' ');
+    const rg=g.max?(g.min===g.max?money(g.max):money(g.min)+' – '+money(g.max)):'—';
+    return `<tr class="pm-row ${f.pattern===g.label?'on':''}" onclick="v9Pmh.pickPattern(${i})" title="Bấm để lọc danh sách theo loại này"><td style="max-width:360px;white-space:normal"><strong>${E(g.label)}</strong><div style="font-size:10px;color:var(--t3);margin-top:2px">VD: ${E(g.example.slice(0,110))}</div></td><td>${sts}</td><td class="nr">${g.prods.size}</td><td class="nr">${g.brands.size}</td><td class="nr">${rg}</td><td>${[...g.tags].map(t=>`<span class="pm-tag">${E(t)}</span>`).join('')||'—'}</td></tr>`;
+  }).join('');
+  sum.innerHTML=kpis+
+    `<div class="pm-box"><h4>🧾 Chi tiết các loại PMH <span style="font-weight:500;color:var(--t3)">— bấm 1 dòng để lọc danh sách bên dưới</span></h4>
+      <div class="tbl-wrap" style="max-height:340px"><table><thead><tr><th>Loại PMH (▢ = số tiền)</th><th>Quy đổi</th><th style="text-align:right">Số SP</th><th style="text-align:right">Số hãng</th><th style="text-align:right">Mệnh giá</th><th>Điều kiện</th></tr></thead><tbody>${pRows}</tbody></table></div></div>`+
+    `<div class="pm-grid">
+      <div class="pm-box"><h4>🔀 Theo khả năng quy đổi</h4><table><thead><tr><th>Trạng thái</th><th style="text-align:right">Số SP</th><th style="text-align:right">PMH TB</th></tr></thead><tbody>${stRows}</tbody></table></div>
+      <div class="pm-box"><h4>💵 Theo mệnh giá PMH</h4><div class="tbl-wrap" style="max-height:230px"><table><thead><tr><th>Mệnh giá</th><th style="text-align:right">Số SP</th><th style="text-align:right">Tỷ lệ</th></tr></thead><tbody>${amRows}</tbody></table></div></div>
+      <div class="pm-box"><h4>🏭 Theo hãng</h4><div class="tbl-wrap" style="max-height:230px"><table><thead><tr><th>Hãng</th><th style="text-align:right">Số SP có PMH</th><th style="text-align:right">PMH TB</th></tr></thead><tbody>${bRows}</tbody></table></div></div>
+    </div>`;
+  const bs=el('pmBrand');
+  if(bs){const cur=f.brand;bs.innerHTML='<option value="">Tất cả hãng</option>'+[...bm.keys()].sort((a,b)=>a.localeCompare(b,'vi')).map(b=>`<option ${b===cur?'selected':''}>${E(b)}</option>`).join('');}
+  renderList();
+}
+function renderList(){
+  const body=el('pmBody2');if(!body)return;
+  const f=S.f;
+  if(el('pmStatus'))el('pmStatus').value=f.status;
+  if(el('pmMin')&&[...el('pmMin').options].some(o=>+o.value===f.min))el('pmMin').value=String(f.min);
+  if(el('pmTag'))el('pmTag').value=f.tag;
+  if(el('pmSort'))el('pmSort').value=f.sort;
+  const ban=el('pmPatBanner');
+  if(ban){
+    if(f.pattern){ban.style.display='flex';ban.innerHTML=`<span>🎯 Đang lọc theo loại PMH: <strong>${E(f.pattern)}</strong></span><button class="btn btn-ghost btn-sm" onclick="v9Pmh.set('pattern','')">✕ Bỏ lọc</button>`;}
+    else{ban.style.display='none';ban.innerHTML='';}
+  }
+  const rows=filtered();
+  const lim=500;
+  if(el('pmRcnt'))el('pmRcnt').textContent=`${Math.min(rows.length,lim)} / ${rows.length} SP`;
+  if(el('pmListBadge'))el('pmListBadge').textContent=S.prods.length?`${rows.length}/${S.prods.length} SP`:'';
+  body.innerHTML=rows.slice(0,lim).map((p,i)=>{
+    const chips=p.pmh.map(x=>`<span class="pm-chip ${x.status}" title="${E(x.raw)}">${x.amount?short(x.amount):'PMH'} · ${x.status==='cash'?'quy đổi':x.status==='no'?'không quy đổi':'tặng'}${x.hoac?' · hoặc':''}</span>`).join('');
+    return `<tr><td style="text-align:center;color:var(--t3);font-size:10px">${i+1}</td>
+      <td><span class="mono">${E(p.ma)}</span></td><td style="font-weight:500">${E(p.name)}</td>
+      <td style="text-align:center"><span style="font-size:10px;color:var(--t2);background:var(--bg3);padding:2px 7px;border-radius:4px">${E(p.brand)}</span></td>
+      <td class="nr">${p.price?money(p.price):''}</td>
+      <td>${chips}<div class="km-t" style="margin-top:3px">${E(p.pmh.map(x=>x.raw).join(' • ').slice(0,200))}</div></td>
+      <td class="nr" style="font-weight:700;color:var(--pu)">${p.total?money(p.total):'—'}</td>
+      <td class="nr ${p.cash?'ng':''}">${p.cash?'-'+money(p.cash):'—'}</td>
+      <td class="nr" style="font-weight:700">${p.cash&&p.after?money(p.after):'—'}</td>
+      <td>${[...p.tags].map(t=>`<span class="pm-tag">${E(t)}</span>`).join('')||'—'}</td></tr>`;
+  }).join('')||`<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--t2)">Không có sản phẩm khớp bộ lọc.</td></tr>`;
+}
+
+/* ── Hành động ── */
+const API={
+  analyze,
+  set(k,v){S.f[k]=v;if(k==='brand'||k==='status'||k==='min'||k==='pattern')render();else renderList();},
+  pickPattern(i){const g=S.patterns[i];if(!g)return;S.f.pattern=S.f.pattern===g.label?'':g.label;render();el('pmListCard')?.scrollIntoView({behavior:'smooth',block:'start'});},
+  reset(){S.f={brand:'',status:'',min:0,tag:'',pattern:'',q:'',sort:'total'};if(el('pmQ'))el('pmQ').value='';render();},
+  copy(){
+    const rows=filtered().slice(0,50);
+    if(!rows.length){toast('Không có sản phẩm để copy',false);return;}
+    const L=[`🎟️ SẢN PHẨM CÓ TẶNG PMH - ${String(tplName).toUpperCase()}`,`Tổng ${filtered().length} SP, copy top ${rows.length}`,''];
+    rows.forEach((p,i)=>{
+      L.push(`${i+1}. ${p.name}`);L.push(`Mã SP: ${p.ma} | Giá bán: ${money(p.price)}`);
+      p.pmh.forEach(x=>L.push(`🎟️ ${x.raw}${x.status==='cash'?' (quy đổi được)':x.status==='no'?' (không quy đổi)':''}`));
+      if(p.cash&&p.after)L.push(`👉 Giá sau trừ PMH: ${money(p.after)}`);
+      if(i<rows.length-1)L.push('---');
+    });
+    const text=L.join('\n'),ok=()=>toast(`✓ Đã copy ${rows.length} SP có PMH`);
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(ok).catch(()=>fb(text,ok));else fb(text,ok);
+  },
+  xlsx(){
+    const rows=filtered();
+    if(!rows.length){toast('Không có sản phẩm để xuất',false);return;}
+    try{
+      const wb=XLSX.utils.book_new();
+      const today=new Date().toLocaleDateString('vi-VN');
+      const sheet=(name,title,headers,widths,data,styler)=>{
+        const ws=xSheet(widths,34),nc=headers.length;
+        ws['!views']=[{showGridLines:false}];
+        xRow(ws,0,nc,title,xStyle(xFont('Arial',15,true,'FFFFFF'),P.T_BG,xAlign('center','center')));xMerge(ws,0,0,0,nc-1);
+        xRow(ws,1,nc,`${tplName} | ${S.src} | Xuất ngày ${today}`,xStyle(xFont('Arial',10,false,'E2E8F0'),P.S_BG,xAlign('center','center')));xMerge(ws,1,0,1,nc-1);
+        ws['!rows'].push({hpx:24});
+        headers.forEach((h,c)=>xCell(ws,2,c,h,xStyle(xFont('Arial',10,true,'FFFFFF'),P.H_INFO,xAlign('center','center',true),P.BH)));
+        ws['!rows'].push({hpx:28});
+        data.forEach((r,i)=>{
+          const bg=i%2?'F8FAFC':'FFFFFF';
+          r.forEach((v,c)=>xCell(ws,3+i,c,v,styler(c,bg,v)));
+          ws['!rows'].push({hpx:24});
+        });
+        ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:2,c:0},e:{r:2+data.length,c:nc-1}})};
+        ws['!freeze']={xSplit:0,ySplit:3};
+        ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:2+data.length,c:nc-1}});
+        XLSX.utils.book_append_sheet(wb,ws,name);
+      };
+      const st=(numCols,leftCols)=>(c,bg,v)=>xStyle(xFont('Arial',9,numCols.includes(c),'0F172A'),bg,xAlign(numCols.includes(c)?'right':leftCols.includes(c)?'left':'center','center',true),'CBD5E1',numCols.includes(c)?'#,##0':undefined);
+      sheet('Tong Hop Loai PMH','TỔNG HỢP CÁC LOẠI PMH',['Loại PMH (▢ = số tiền)','Quy đổi','Số SP','Số hãng','Mệnh giá thấp nhất','Mệnh giá cao nhất','Điều kiện','Ví dụ nội dung'],[52,26,9,9,16,16,24,60],
+        S.patterns.map(g=>[g.label,[...g.statusSet].map(k=>ST[k]).join(' / '),g.prods.size,g.brands.size,g.min===Infinity?0:g.min,g.max,[...g.tags].join(', '),g.example]),st([2,3,4,5],[0,1,6,7]));
+      sheet('Danh Sach SP Co PMH','DANH SÁCH SẢN PHẨM CÓ TẶNG PMH',['STT','Mã SP','Tên sản phẩm','Hãng','Giá bán','PMH chi tiết','Tổng PMH','Trừ được vào giá','Giá sau trừ PMH','Điều kiện'],[6,18,46,14,16,60,16,16,16,22],
+        rows.map((p,i)=>[i+1,p.ma,p.name,p.brand,p.price||0,p.pmh.map(x=>x.raw).join(' • '),p.total,p.cash,p.cash?p.after:0,[...p.tags].join(', ')]),st([4,6,7,8],[2,5,9]));
+      const bm=new Map();rows.forEach(p=>{const b=bm.get(p.brand)||{n:0,v:0,c:0};b.n++;b.v+=p.total;if(p.cash)b.c++;bm.set(p.brand,b);});
+      sheet('Theo Hang','PMH THEO HÃNG',['Hãng','Số SP có PMH','Số SP quy đổi được','PMH trung bình / SP'],[22,16,20,22],
+        [...bm.entries()].sort((a,b)=>b[1].n-a[1].n).map(([b,d])=>[b,d.n,d.c,Math.round(d.v/d.n)]),st([1,2,3],[0]));
+      const fname=`TongHop_PMH_${String(tplName).replace(/[\s–—\/]+/g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
+      XLSX.writeFile(wb,fname,{cellStyles:true});
+      toast(`✓ Xuất ${rows.length} SP có PMH (3 sheet)`);
+    }catch(e){toast('Lỗi xuất Excel PMH: '+e.message,false);console.error(e);}
+  },
+  _parseKm:parseKm
+};
+function fb(text,cb){const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');cb&&cb();}catch(e){toast('Không thể copy tự động',false);}document.body.removeChild(ta);}
+window.v9Pmh=API;
+
+/* ── Gắn vào luồng của app ── */
+build();
+if(typeof window.switchMainTab==='function'||el('tabPMH')){
+  window.switchMainTab=function(tab){
+    const cmp=tab==='compare';
+    document.querySelectorAll('.tab-compare').forEach(e=>e.classList.toggle('hid',!cmp));
+    el('tabCatalog').classList.toggle('hid',tab!=='catalog');
+    const pm=el('tabPMH');if(pm)pm.classList.toggle('hid',tab!=='pmh');
+    el('mtBtnCompare').classList.toggle('on',cmp);
+    el('mtBtnCatalog').classList.toggle('on',tab==='catalog');
+    const pb=el('mtBtnPMH');if(pb)pb.classList.toggle('on',tab==='pmh');
+    try{localStorage.setItem('bgp_maintab',tab);}catch(e){}
+    if(tab==='catalog')renderCatalog();
+    if(tab==='pmh')analyze();
+    window.scrollTo({top:0,behavior:'smooth'});
+  };
+}
+const hook=name=>{const o=window[name];if(typeof o!=='function')return;window[name]=function(){const r=o.apply(this,arguments);try{analyze();}catch(e){console.error(e);}return r;};};
+['chkReady','selTpl','resetAll'].forEach(hook);
+const _tm=window.toggleManual;
+if(typeof _tm==='function')window.toggleManual=function(){const r=_tm.apply(this,arguments);try{analyze();}catch(e){}return r;};
+render();
+})();
+
 </script>
 </body>
 </html>
